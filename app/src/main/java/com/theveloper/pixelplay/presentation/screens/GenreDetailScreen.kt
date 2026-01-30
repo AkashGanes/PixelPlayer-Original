@@ -47,6 +47,7 @@ import coil.request.ImageRequest
 import com.theveloper.pixelplay.R
 import com.theveloper.pixelplay.data.model.Song
 import com.theveloper.pixelplay.presentation.components.ExpressiveTopBarContent
+import com.theveloper.pixelplay.presentation.components.ExpressiveScrollBar
 import com.theveloper.pixelplay.presentation.components.GenreSortBottomSheet
 import com.theveloper.pixelplay.presentation.components.MiniPlayerHeight
 import com.theveloper.pixelplay.presentation.components.SmartImage
@@ -234,7 +235,8 @@ fun GenreDetailScreen(
                     contentPadding = PaddingValues(
                         top = currentTopBarHeightDp + 8.dp, // Push content down initially
                         start = 8.dp,
-                        end = 8.dp,
+                        // Only add end padding if scrollbar is visible (collapsed header)
+                        end = if ((lazyListState.canScrollForward || lazyListState.canScrollBackward) && collapseFraction > 0.95f) 20.dp else 8.dp,
                         bottom = fabBottomPadding + 148.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -285,6 +287,19 @@ fun GenreDetailScreen(
                         }
                     }
                 }
+            }
+
+            // Only show scrollbar when the top bar is mostly collapsed to avoid visual conflict
+            if (collapseFraction > 0.95f) {
+                ExpressiveScrollBar(
+                    listState = lazyListState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(
+                            top = currentTopBarHeightDp + 12.dp, // Added 12.dp as requested
+                            bottom = fabBottomPadding + 112.dp // Increased by 40dp as requested (72 + 40 = 112)
+                        )
+                )
             }
 
             // Collapsible Top Bar with Gradient (On Top of List, High Z-Index)
