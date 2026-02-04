@@ -626,6 +626,14 @@ class PlaylistViewModel @Inject constructor(
         }
     }
 
+    fun addSongsToPlaylists(songIds: List<String>, playlistIds: List<String>) {
+        viewModelScope.launch {
+            playlistIds.forEach { playlistId ->
+                userPreferencesRepository.addSongsToPlaylist(playlistId, songIds)
+            }
+        }
+    }
+
     fun removeSongFromPlaylist(playlistId: String, songIdToRemove: String) {
         if (isFolderPlaylistId(playlistId)) return
         viewModelScope.launch {

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -117,6 +118,9 @@ import com.theveloper.pixelplay.presentation.components.ReorderTabsSheet
 import com.theveloper.pixelplay.presentation.components.SongInfoBottomSheet
 import com.theveloper.pixelplay.presentation.components.subcomps.LibraryActionRow
 import com.theveloper.pixelplay.presentation.navigation.Screen
+import com.theveloper.pixelplay.presentation.components.MultiSelectionBottomSheet
+import com.theveloper.pixelplay.presentation.components.subcomps.SelectionActionRow
+import com.theveloper.pixelplay.presentation.components.subcomps.SelectionCountPill
 import com.theveloper.pixelplay.presentation.viewmodel.ColorSchemePair
 import com.theveloper.pixelplay.presentation.viewmodel.PlayerViewModel
 import com.theveloper.pixelplay.presentation.viewmodel.StablePlayerState
@@ -188,6 +192,7 @@ import androidx.paging.compose.itemKey
 import androidx.paging.LoadState
 import com.theveloper.pixelplay.presentation.components.ExpressiveScrollBar
 import com.theveloper.pixelplay.presentation.components.LibrarySortBottomSheet
+import com.theveloper.pixelplay.presentation.components.subcomps.EnhancedSongListItem
 
 val ListExtraBottomGap = 30.dp
 val PlayerSheetCollapsedCornerRadius = 32.dp
@@ -213,6 +218,7 @@ fun LibraryScreen(
 
     var showSongInfoBottomSheet by remember { mutableStateOf(false) }
     var showPlaylistBottomSheet by remember { mutableStateOf(false) }
+    var playlistSheetSongs by remember { mutableStateOf<List<Song>>(emptyList()) }
     val selectedSongForInfo by playerViewModel.selectedSongForInfo.collectAsState()
     val tabTitles by playerViewModel.libraryTabsFlow.collectAsState()
     val pagerState = rememberPagerState(initialPage = lastTabIndex) { tabTitles.size }
@@ -229,6 +235,22 @@ fun LibraryScreen(
 
     var showReorderTabsSheet by remember { mutableStateOf(false) }
     var showTabSwitcherSheet by remember { mutableStateOf(false) }
+    
+    // Multi-selection state
+    val multiSelectionState = playerViewModel.multiSelectionStateHolder
+    val selectedSongs by multiSelectionState.selectedSongs.collectAsState()
+    val isSelectionMode by multiSelectionState.isSelectionMode.collectAsState()
+    val selectedSongIds by multiSelectionState.selectedSongIds.collectAsState()
+    var showMultiSelectionSheet by remember { mutableStateOf(false) }
+    
+    // Multi-selection callbacks
+    val onSongLongPress: (Song) -> Unit = remember(multiSelectionState) {
+        { song -> multiSelectionState.toggleSelection(song) }
+    }
+    
+    val onSongSelectionToggle: (Song) -> Unit = remember(multiSelectionState) {
+        { song -> multiSelectionState.toggleSelection(song) }
+    }
 
     val stableOnMoreOptionsClick: (Song) -> Unit = remember {
         { song ->
@@ -289,6 +311,9 @@ fun LibraryScreen(
         Trace.beginSection("LibraryScreen.PageChangeTabLoad")
         playerViewModel.onLibraryTabSelected(pagerState.currentPage)
         Trace.endSection()
+        
+        // Clear selection when switching tabs
+        multiSelectionState.clearSelection()
     }
 
     val fabState by remember { derivedStateOf { pagerState.currentPage } } // UI sin cambios
@@ -467,7 +492,7 @@ fun LibraryScreen(
                 Surface(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 8.dp, vertical = 0.dp), // Added vertical padding
+                        .padding(horizontal = 0.dp, vertical = 0.dp), // Removed horizontal padding for more space
                     color = MaterialTheme.colorScheme.surface,
                     shape = AbsoluteSmoothCornerShape(
                         cornerRadiusTL = 34.dp,
@@ -529,37 +554,72 @@ fun LibraryScreen(
 
                         //val playerUiState by playerViewModel.playerUiState.collectAsState()
                             //val playerUiState by playerViewModel.playerUiState.collectAsState()
-                        LibraryActionRow(
+                        
+                        // Switch between normal action row and selection action row
+                        AnimatedContent(
+                            targetState = isSelectionMode,
+                            label = "ActionRowModeSwitch",
+                            transitionSpec = {
+                                (slideInHorizontally { -it } + fadeIn()) togetherWith
+                                    (slideOutHorizontally { it } + fadeOut())
+                            },
                             modifier = Modifier
                                 .padding(
                                     top = 6.dp,
                                     start = 10.dp,
                                     end = 10.dp
                                 )
-                                .heightIn(min = 56.dp), // Fix for height jump
-                            //currentPage = pagerState.currentPage,
-                            onMainActionClick = {
-                                when (tabTitles.getOrNull(pagerState.currentPage)?.toLibraryTabIdOrNull()) {
-                                    LibraryTabId.PLAYLISTS -> showCreatePlaylistDialog = true
-                                    LibraryTabId.LIKED -> playerViewModel.shuffleFavoriteSongs()
-                                    LibraryTabId.ALBUMS -> playerViewModel.shuffleRandomAlbum()
-                                    LibraryTabId.ARTISTS -> playerViewModel.shuffleRandomArtist()
-                                    else -> playerViewModel.shuffleAllSongs()
-                                }
-                            },
-                            iconRotation = iconRotation,
-                            showSortButton = sanitizedSortOptions.isNotEmpty(),
-                            onSortClick = { playerViewModel.showSortingSheet() },
-                            isPlaylistTab = currentTabId == LibraryTabId.PLAYLISTS,
-                            isFoldersTab = currentTabId == LibraryTabId.FOLDERS && (!playerUiState.isFoldersPlaylistView || playerUiState.currentFolder != null),
-                            onGenerateWithAiClick = { /* Unused now */ },
-                            onImportM3uClick = { m3uImportLauncher.launch("audio/x-mpegurl") },
-                            //onFilterClick = { playerViewModel.toggleFolderFilter() },
-                            currentFolder = playerUiState.currentFolder,
-                            onFolderClick = { playerViewModel.navigateToFolder(it) },
-                            onNavigateBack = { playerViewModel.navigateBackFolder() },
-                            isShuffleEnabled = stablePlayerState.isShuffleEnabled
-                        )
+                                .heightIn(min = 56.dp)
+                        ) { inSelectionMode ->
+                            if (inSelectionMode) {
+                                SelectionActionRow(
+                                    selectedCount = selectedSongs.size,
+                                    onSelectAll = { 
+                                        val songsToSelect = when (tabTitles.getOrNull(pagerState.currentPage)?.toLibraryTabIdOrNull()) {
+                                            LibraryTabId.LIKED -> playerViewModel.favoriteSongs.value
+                                            LibraryTabId.FOLDERS -> {
+                                                // If we are deep in a folder, select songs of that folder.
+                                                // If we are at root, there are no songs to select.
+                                                playerViewModel.playerUiState.value.currentFolder?.songs ?: emptyList()
+                                            }
+                                            // For SONGS and others fallback to all songs? 
+                                            // Actually ALBUMS/ARTISTS don't show songs list directly, they show items. 
+                                            // Selection mode is likely disabled there or not reachable.
+                                            // But for SONGS tab:
+                                            LibraryTabId.SONGS -> playerViewModel.playerUiState.value.allSongs
+                                            else -> emptyList()
+                                        }
+                                        multiSelectionState.selectAll(songsToSelect)
+                                    },
+                                    onDeselect = { multiSelectionState.clearSelection() },
+                                    onOptionsClick = { showMultiSelectionSheet = true }
+                                )
+                            } else {
+                                LibraryActionRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onMainActionClick = {
+                                        when (tabTitles.getOrNull(pagerState.currentPage)?.toLibraryTabIdOrNull()) {
+                                            LibraryTabId.PLAYLISTS -> showCreatePlaylistDialog = true
+                                            LibraryTabId.LIKED -> playerViewModel.shuffleFavoriteSongs()
+                                            LibraryTabId.ALBUMS -> playerViewModel.shuffleRandomAlbum()
+                                            LibraryTabId.ARTISTS -> playerViewModel.shuffleRandomArtist()
+                                            else -> playerViewModel.shuffleAllSongs()
+                                        }
+                                    },
+                                    iconRotation = iconRotation,
+                                    showSortButton = sanitizedSortOptions.isNotEmpty(),
+                                    onSortClick = { playerViewModel.showSortingSheet() },
+                                    isPlaylistTab = currentTabId == LibraryTabId.PLAYLISTS,
+                                    isFoldersTab = currentTabId == LibraryTabId.FOLDERS && (!playerUiState.isFoldersPlaylistView || playerUiState.currentFolder != null),
+                                    onGenerateWithAiClick = { /* Unused now */ },
+                                    onImportM3uClick = { m3uImportLauncher.launch("audio/x-mpegurl") },
+                                    currentFolder = playerUiState.currentFolder,
+                                    onFolderClick = { playerViewModel.navigateToFolder(it) },
+                                    onNavigateBack = { playerViewModel.navigateBackFolder() },
+                                    isShuffleEnabled = stablePlayerState.isShuffleEnabled
+                                )
+                            }
+                        }
 
                         if (isSortSheetVisible && sanitizedSortOptions.isNotEmpty()) {
                             val currentSelectionKey = currentSelectedSortOption?.storageKey
@@ -634,15 +694,17 @@ fun LibraryScreen(
                             )
                         }
 
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(top = 8.dp),
-                            pageSpacing = 0.dp,
-                            beyondViewportPageCount = 1, // Pre-load adjacent tabs to reduce lag when switching
-                            key = { tabTitles[it] }
-                        ) { page ->
+                        // Box wrapper to allow floating SelectionCountPill overlay
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(top = 8.dp),
+                                pageSpacing = 0.dp,
+                                beyondViewportPageCount = 1, // Pre-load adjacent tabs to reduce lag when switching
+                                key = { tabTitles[it] }
+                            ) { page ->
                             when (tabTitles.getOrNull(page)?.toLibraryTabIdOrNull()) {
                                 LibraryTabId.SONGS -> {
                                     // Use sorted allSongs from LibraryStateHolder
@@ -659,7 +721,12 @@ fun LibraryScreen(
                                         bottomBarHeight = bottomBarHeightDp,
                                         onMoreOptionsClick = stableOnMoreOptionsClick,
                                         isRefreshing = isRefreshing,
-                                        onRefresh = onRefresh
+                                        onRefresh = onRefresh,
+                                        // Multi-selection parameters
+                                        isSelectionMode = isSelectionMode,
+                                        selectedSongIds = selectedSongIds,
+                                        onSongLongPress = onSongLongPress,
+                                        onSongSelectionToggle = onSongSelectionToggle
                                     )
                                 }
                                 LibraryTabId.ALBUMS -> {
@@ -742,7 +809,12 @@ fun LibraryScreen(
                                         bottomBarHeight = bottomBarHeightDp,
                                         onMoreOptionsClick = stableOnMoreOptionsClick,
                                         isRefreshing = isRefreshing,
-                                        onRefresh = onRefresh
+                                        onRefresh = onRefresh,
+                                        isSelectionMode = isSelectionMode,
+                                        selectedSongIds = selectedSongIds,
+                                        onSongLongPress = onSongLongPress,
+                                        onSongSelectionToggle = onSongSelectionToggle,
+                                        getSelectionIndex = playerViewModel.multiSelectionStateHolder::getSelectionIndex
                                     )
                                 }
 
@@ -785,7 +857,12 @@ fun LibraryScreen(
                                             isPlaylistView = playerUiState.isFoldersPlaylistView,
                                             currentSortOption = playerUiState.currentFolderSortOption,
                                             isRefreshing = isRefreshing,
-                                            onRefresh = onRefresh
+                                            onRefresh = onRefresh,
+                                            isSelectionMode = isSelectionMode,
+                                            selectedSongIds = selectedSongIds,
+                                            onSongLongPress = onSongLongPress,
+                                            onSongSelectionToggle = onSongSelectionToggle,
+                                            getSelectionIndex = playerViewModel.multiSelectionStateHolder::getSelectionIndex
                                         )
                                     } else {
                                         Column(
@@ -810,6 +887,15 @@ fun LibraryScreen(
 
                                 null -> Unit
                             }
+                            }
+                            
+                            // Floating selection count pill overlay
+                            SelectionCountPill(
+                                selectedCount = selectedSongs.size,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .zIndex(1f)
+                            )
                         }
                     }
                 }
@@ -964,6 +1050,7 @@ fun LibraryScreen(
                     playerViewModel.sendToast("Will play next")
                 },
                 onAddToPlayList = {
+                    playlistSheetSongs = listOf(currentSong)
                     showPlaylistBottomSheet = true
                 },
                 onDeleteFromDevice = playerViewModel::deleteFromDevice,
@@ -983,19 +1070,67 @@ fun LibraryScreen(
                 },
                 removeFromListTrigger = {}
             )
-
-            if (showPlaylistBottomSheet) {
-                val playlistUiState by playlistViewModel.uiState.collectAsState()
-
-                PlaylistBottomSheet(
-                    playlistUiState = playlistUiState,
-                    song = currentSong,
-                    onDismiss = { showPlaylistBottomSheet = false },
-                    bottomBarHeight = bottomBarHeightDp,
-                    playerViewModel = playerViewModel,
-                )
-            }
         }
+    }
+
+    if (showPlaylistBottomSheet) {
+        val playlistUiState by playlistViewModel.uiState.collectAsState()
+
+        PlaylistBottomSheet(
+            playlistUiState = playlistUiState,
+            songs = playlistSheetSongs,
+            onDismiss = { showPlaylistBottomSheet = false },
+            bottomBarHeight = bottomBarHeightDp,
+            playerViewModel = playerViewModel,
+        )
+    }
+
+    // Multi-Selection Bottom Sheet
+    if (showMultiSelectionSheet && selectedSongs.isNotEmpty()) {
+        val activity = context as? android.app.Activity
+        
+        MultiSelectionBottomSheet(
+            selectedSongs = selectedSongs,
+            favoriteSongIds = favoriteIds,
+            onDismiss = { showMultiSelectionSheet = false },
+            onPlayAll = { 
+                playerViewModel.playSelectedSongs(selectedSongs)
+                showMultiSelectionSheet = false
+            },
+            onAddToQueue = {
+                playerViewModel.addSelectedToQueue(selectedSongs)
+                showMultiSelectionSheet = false
+            },
+            onPlayNext = {
+                playerViewModel.addSelectedAsNext(selectedSongs)
+                showMultiSelectionSheet = false
+            },
+            onAddToPlaylist = {
+                playlistSheetSongs = selectedSongs
+                showMultiSelectionSheet = false
+                showPlaylistBottomSheet = true
+            },
+            onToggleLikeAll = { shouldLike ->
+                if (shouldLike) {
+                    playerViewModel.likeSelectedSongs(selectedSongs)
+                } else {
+                    playerViewModel.unlikeSelectedSongs(selectedSongs)
+                }
+                showMultiSelectionSheet = false
+            },
+            onShareAll = {
+                playerViewModel.shareSelectedAsZip(selectedSongs)
+                showMultiSelectionSheet = false
+            },
+            onDeleteAll = { _, onComplete ->
+                activity?.let {
+                    playerViewModel.deleteSelectedFromDevice(it, selectedSongs) {
+                        showMultiSelectionSheet = false
+                        onComplete(true)
+                    }
+                }
+            }
+        )
     }
 
     if (showTabSwitcherSheet) {
@@ -1328,7 +1463,12 @@ fun LibraryFoldersTab(
     isPlaylistView: Boolean = false,
     currentSortOption: SortOption = SortOption.FolderNameAZ,
     isRefreshing: Boolean,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    isSelectionMode: Boolean = false,
+    selectedSongIds: Set<String> = emptySet(),
+    onSongLongPress: (Song) -> Unit = {},
+    onSongSelectionToggle: (Song) -> Unit = {},
+    getSelectionIndex: (String) -> Int? = { null }
 ) {
     // List state moved inside AnimatedContent to prevent state sharing issues during transitions
 
@@ -1478,13 +1618,21 @@ fun LibraryFoldersTab(
                                         isPlaying = stablePlayerState.currentSong?.id == song.id && stablePlayerState.isPlaying,
                                         isCurrentSong = stablePlayerState.currentSong?.id == song.id,
                                         onMoreOptionsClick = { onMoreOptionsClick(song) },
+                                        isSelected = selectedSongIds.contains(song.id),
+                                        selectionIndex = if (isSelectionMode) getSelectionIndex(song.id) else null,
+                                        isSelectionMode = isSelectionMode,
+                                        onLongPress = { onSongLongPress(song) },
                                         onClick = {
-                                            val songIndex = songsToShow.indexOf(song)
-                                            if (songIndex != -1) {
-                                                val songsToPlay =
-                                                    songsToShow.subList(songIndex, songsToShow.size)
-                                                        .toList()
-                                                onPlaySong(song, songsToPlay)
+                                            if (isSelectionMode) {
+                                                onSongSelectionToggle(song)
+                                            } else {
+                                                val songIndex = songsToShow.indexOf(song)
+                                                if (songIndex != -1) {
+                                                    val songsToPlay =
+                                                        songsToShow.subList(songIndex, songsToShow.size)
+                                                            .toList()
+                                                    onPlaySong(song, songsToPlay)
+                                                }
                                             }
                                         }
                                     )
@@ -1600,7 +1748,12 @@ fun LibraryFavoritesTab(
     bottomBarHeight: Dp,
     onMoreOptionsClick: (Song) -> Unit,
     isRefreshing: Boolean,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    isSelectionMode: Boolean = false,
+    selectedSongIds: Set<String> = emptySet(),
+    onSongLongPress: (Song) -> Unit = {},
+    onSongSelectionToggle: (Song) -> Unit = {},
+    getSelectionIndex: (String) -> Int? = { null }
 ) {
     val stablePlayerState by playerViewModel.stablePlayerState.collectAsState()
     val listState = rememberLazyListState()
@@ -1673,12 +1826,20 @@ fun LibraryFavoritesTab(
                                 isCurrentSong = stablePlayerState.currentSong?.id == song.id,
                                 isPlaying = isPlayingThisSong,
                                 onMoreOptionsClick = { onMoreOptionsClick(song) },
+                                isSelected = selectedSongIds.contains(song.id),
+                                selectionIndex = if (isSelectionMode) getSelectionIndex(song.id) else null,
+                                isSelectionMode = isSelectionMode,
+                                onLongPress = { onSongLongPress(song) },
                                 onClick = {
-                                    playerViewModel.showAndPlaySong(
-                                        song,
-                                        favoriteSongs,
-                                        "Liked Songs"
-                                    )
+                                    if (isSelectionMode) {
+                                        onSongSelectionToggle(song)
+                                    } else {
+                                        playerViewModel.showAndPlaySong(
+                                            song,
+                                            favoriteSongs,
+                                            "Liked Songs"
+                                        )
+                                    }
                                 }
                             )
                         }
@@ -2122,224 +2283,6 @@ fun LibrarySongsTabPaginated(
                             )
                         )
                 )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun EnhancedSongListItem(
-    modifier: Modifier = Modifier,
-    song: Song,
-    isPlaying: Boolean,
-    isCurrentSong: Boolean = false,
-    isLoading: Boolean = false,
-    onMoreOptionsClick: (Song) -> Unit,
-    onClick: () -> Unit
-) {
-    // Animamos el radio de las esquinas basándonos en si la canción es la actual.
-    val animatedCornerRadius by animateDpAsState(
-        targetValue = if (isCurrentSong && !isLoading) 50.dp else 22.dp,
-        animationSpec = tween(durationMillis = 400),
-        label = "cornerRadiusAnimation"
-    )
-
-    val animatedAlbumCornerRadius by animateDpAsState(
-        targetValue = if (isCurrentSong && !isLoading) 50.dp else 12.dp,
-        animationSpec = tween(durationMillis = 400),
-        label = "cornerRadiusAnimation"
-    )
-
-    val surfaceShape = remember(animatedCornerRadius) {
-        AbsoluteSmoothCornerShape(
-            cornerRadiusTL = animatedCornerRadius,
-            smoothnessAsPercentTR = 60,
-            cornerRadiusTR = animatedCornerRadius,
-            smoothnessAsPercentBR = 60,
-            cornerRadiusBL = animatedCornerRadius,
-            smoothnessAsPercentBL = 60,
-            cornerRadiusBR = animatedCornerRadius,
-            smoothnessAsPercentTL = 60
-        )
-    }
-
-    val albumShape = remember(animatedCornerRadius) {
-        AbsoluteSmoothCornerShape(
-            cornerRadiusTL = animatedAlbumCornerRadius,
-            smoothnessAsPercentTR = 60,
-            cornerRadiusTR = animatedAlbumCornerRadius,
-            smoothnessAsPercentBR = 60,
-            cornerRadiusBL = animatedAlbumCornerRadius,
-            smoothnessAsPercentBL = 60,
-            cornerRadiusBR = animatedAlbumCornerRadius,
-            smoothnessAsPercentTL = 60
-        )
-    }
-
-    val colors = MaterialTheme.colorScheme
-    val containerColor = if ((isCurrentSong) && !isLoading) colors.primaryContainer else colors.surfaceContainerLow
-    val contentColor = if ((isCurrentSong) && !isLoading) colors.onPrimaryContainer else colors.onSurface
-
-    val mvContainerColor = if ((isCurrentSong) && !isLoading) colors.primaryContainer else colors.onSurface
-    val mvContentColor = if ((isCurrentSong) && !isLoading) colors.onPrimaryContainer else colors.surfaceContainerHigh
-
-    if (isLoading) {
-        // Shimmer Placeholder Layout
-        Surface(
-            modifier = modifier
-                .fillMaxWidth()
-                .clip(surfaceShape),
-            shape = surfaceShape,
-            color = colors.surfaceContainerLow,
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 13.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ShimmerBox(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                )
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp)
-                ) {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth(0.7f)
-                            .height(20.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth(0.5f)
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth(0.3f)
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                ShimmerBox(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                )
-            }
-        }
-    } else {
-        // Actual Song Item Layout
-        var applyTextMarquee by remember { mutableStateOf(false) }
-
-        Surface(
-            modifier = modifier
-                .fillMaxWidth()
-                .clip(surfaceShape)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = { onClick() },
-                        onLongPress = { applyTextMarquee = !applyTextMarquee },
-                        onPress = {
-                            try {
-                                awaitRelease()
-                            } finally {
-                                applyTextMarquee = false
-                            }
-                        })
-                },
-            shape = surfaceShape,
-            color = containerColor,
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 13.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                ) {
-                    // Usando tu composable SmartImage
-                    SmartImage(
-                        model = song.albumArtUriString,
-                        contentDescription = song.title,
-                        shape = albumShape,
-                        targetSize = Size(168, 168), // 56dp * 3 (para densidad xxhdpi)
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 14.dp)
-                ) {
-                    if (applyTextMarquee) {
-                        AutoScrollingTextOnDemand(
-                            text = song.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            gradientEdgeColor = containerColor,
-                            expansionFractionProvider = { 1f },
-                        )
-
-                    } else {
-                        Text(
-                            text = song.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            color = contentColor,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = song.displayArtist,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = contentColor.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (isCurrentSong) {
-                     PlayingEqIcon(
-                         modifier = Modifier
-                             .padding(start = 8.dp)
-                             .size(width = 18.dp, height = 16.dp),
-                         color = contentColor,
-                         isPlaying = isPlaying
-                     )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                FilledIconButton(
-                    onClick = { onMoreOptionsClick(song) },
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = mvContentColor,
-                        contentColor = mvContainerColor
-                    ),
-                    modifier = Modifier
-                        .size(36.dp)
-                        .padding(end = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.MoreVert,
-                        contentDescription = "More options for ${song.title}",
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
             }
         }
     }
@@ -2823,9 +2766,9 @@ fun LibraryArtistsTab(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(bottom = bottomBarHeight + MiniPlayerHeight + ListExtraBottomGap)
                     ) {
-                        item(key = "artists_top_spacer") {
-                            Spacer(Modifier.height(4.dp))
-                        }
+//                        item(key = "artists_top_spacer") {
+//                            Spacer(Modifier.height(4.dp))
+//                        }
                         items(artists, key = { "artist_${it.id}" }) { artist ->
                             val rememberedOnClick = remember(artist) { { onArtistClick(artist.id) } }
                             ArtistListItem(artist = artist, onClick = rememberedOnClick)
@@ -2853,17 +2796,6 @@ fun LibraryArtistsTab(
                     )
                 }
             }
-//            Box(
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .height(10.dp)
-//                    .background(
-//                        brush = Brush.verticalGradient(
-//                            colors = listOf(MaterialTheme.colorScheme.surface, Color.Transparent)
-//                        )
-//                    )
-//                    .align(Alignment.TopCenter)
-//            )
         }
     }
 }
