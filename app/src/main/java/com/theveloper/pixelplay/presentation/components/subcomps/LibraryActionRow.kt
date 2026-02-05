@@ -10,7 +10,9 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.ButtonDefaults
@@ -72,7 +75,9 @@ fun LibraryActionRow(
     onMainActionClick: () -> Unit,
     iconRotation: Float,
     onSortClick: () -> Unit,
+    onLocateClick: () -> Unit = {},
     showSortButton: Boolean,
+    showLocateButton: Boolean = false,
     showGenerateButton: Boolean = true,
     isPlaylistTab: Boolean,
     onGenerateWithAiClick: () -> Unit,
@@ -248,11 +253,56 @@ fun LibraryActionRow(
         Spacer(modifier = Modifier.width(8.dp))
 
         if (showSortButton) {
-            FilledTonalIconButton(onClick = onSortClick) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.Sort,
-                    contentDescription = "Sort Options",
-                )
+            val outerCorner = 26.dp
+            val innerCorner by animateDpAsState(
+                targetValue = if (showLocateButton) 8.dp else outerCorner,
+                label = "SortButtonsInnerCorner"
+            )
+            val actionButtonsGap by animateDpAsState(
+                targetValue = if (showLocateButton) 4.dp else 0.dp,
+                label = "SortButtonsGap"
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AnimatedVisibility(
+                    visible = showLocateButton,
+                    enter = slideInHorizontally(initialOffsetX = { it / 2 }) + fadeIn(),
+                    exit = slideOutHorizontally(targetOffsetX = { it / 2 }) + fadeOut()
+                ) {
+                    FilledTonalIconButton(
+                        onClick = onLocateClick,
+                        shape = RoundedCornerShape(
+                            topStart = outerCorner,
+                            bottomStart = outerCorner,
+                            topEnd = innerCorner,
+                            bottomEnd = innerCorner
+                        ),
+                        modifier = Modifier.size(genHeight)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MyLocation,
+                            contentDescription = "Locate Current Song"
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(actionButtonsGap))
+
+                FilledTonalIconButton(
+                    onClick = onSortClick,
+                    shape = RoundedCornerShape(
+                        topStart = innerCorner,
+                        bottomStart = innerCorner,
+                        topEnd = outerCorner,
+                        bottomEnd = outerCorner
+                    ),
+                    modifier = Modifier.size(genHeight)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.Sort,
+                        contentDescription = "Sort Options",
+                    )
+                }
             }
         }
     }

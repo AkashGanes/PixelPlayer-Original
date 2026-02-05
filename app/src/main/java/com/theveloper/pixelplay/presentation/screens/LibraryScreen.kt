@@ -67,6 +67,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -74,6 +75,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -246,6 +248,13 @@ fun LibraryScreen(
     val isSelectionMode by multiSelectionState.isSelectionMode.collectAsState()
     val selectedSongIds by multiSelectionState.selectedSongIds.collectAsState()
     var showMultiSelectionSheet by remember { mutableStateOf(false) }
+
+    var songsShowLocateButton by remember { mutableStateOf(false) }
+    var likedShowLocateButton by remember { mutableStateOf(false) }
+    var foldersShowLocateButton by remember { mutableStateOf(false) }
+    var songsLocateAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var likedLocateAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var foldersLocateAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     
     // Multi-selection callbacks
     val onSongLongPress: (Song) -> Unit = remember(multiSelectionState) {
@@ -554,6 +563,19 @@ fun LibraryScreen(
                             LibraryTabId.FOLDERS -> playerUiState.currentFolderSortOption
                         }
 
+                        val showLocateButton = when (currentTabId) {
+                            LibraryTabId.SONGS -> songsShowLocateButton
+                            LibraryTabId.LIKED -> likedShowLocateButton
+                            LibraryTabId.FOLDERS -> foldersShowLocateButton
+                            else -> false
+                        }
+                        val locateAction = when (currentTabId) {
+                            LibraryTabId.SONGS -> songsLocateAction
+                            LibraryTabId.LIKED -> likedLocateAction
+                            LibraryTabId.FOLDERS -> foldersLocateAction
+                            else -> null
+                        }
+
                         val onSortOptionChanged: (SortOption) -> Unit = remember(playerViewModel, playlistViewModel, currentTabId) {
                             { option ->
                                 when (currentTabId) {
@@ -623,7 +645,9 @@ fun LibraryScreen(
                                     },
                                     iconRotation = iconRotation,
                                     showSortButton = sanitizedSortOptions.isNotEmpty(),
+                                    showLocateButton = showLocateButton,
                                     onSortClick = { playerViewModel.showSortingSheet() },
+                                    onLocateClick = { locateAction?.invoke() },
                                     isPlaylistTab = currentTabId == LibraryTabId.PLAYLISTS,
                                     isFoldersTab = currentTabId == LibraryTabId.FOLDERS && (!playerUiState.isFoldersPlaylistView || playerUiState.currentFolder != null),
                                     onGenerateWithAiClick = { /* Unused now */ },
@@ -791,7 +815,9 @@ fun LibraryScreen(
                                         isSelectionMode = isSelectionMode,
                                         selectedSongIds = selectedSongIds,
                                         onSongLongPress = onSongLongPress,
-                                        onSongSelectionToggle = onSongSelectionToggle
+                                        onSongSelectionToggle = onSongSelectionToggle,
+                                        onLocateCurrentSongVisibilityChanged = { songsShowLocateButton = it },
+                                        onRegisterLocateCurrentSongAction = { songsLocateAction = it }
                                     )
                                 }
                                 LibraryTabId.ALBUMS -> {
@@ -879,7 +905,9 @@ fun LibraryScreen(
                                         selectedSongIds = selectedSongIds,
                                         onSongLongPress = onSongLongPress,
                                         onSongSelectionToggle = onSongSelectionToggle,
-                                        getSelectionIndex = playerViewModel.multiSelectionStateHolder::getSelectionIndex
+                                        getSelectionIndex = playerViewModel.multiSelectionStateHolder::getSelectionIndex,
+                                        onLocateCurrentSongVisibilityChanged = { likedShowLocateButton = it },
+                                        onRegisterLocateCurrentSongAction = { likedLocateAction = it }
                                     )
                                 }
 
@@ -927,7 +955,9 @@ fun LibraryScreen(
                                             selectedSongIds = selectedSongIds,
                                             onSongLongPress = onSongLongPress,
                                             onSongSelectionToggle = onSongSelectionToggle,
-                                            getSelectionIndex = playerViewModel.multiSelectionStateHolder::getSelectionIndex
+                                            getSelectionIndex = playerViewModel.multiSelectionStateHolder::getSelectionIndex,
+                                            onLocateCurrentSongVisibilityChanged = { foldersShowLocateButton = it },
+                                            onRegisterLocateCurrentSongAction = { foldersLocateAction = it }
                                         )
                                     } else {
                                         Column(
@@ -1533,7 +1563,9 @@ fun LibraryFoldersTab(
     selectedSongIds: Set<String> = emptySet(),
     onSongLongPress: (Song) -> Unit = {},
     onSongSelectionToggle: (Song) -> Unit = {},
-    getSelectionIndex: (String) -> Int? = { null }
+    getSelectionIndex: (String) -> Int? = { null },
+    onLocateCurrentSongVisibilityChanged: (Boolean) -> Unit = {},
+    onRegisterLocateCurrentSongAction: ((() -> Unit)?) -> Unit = {}
 ) {
     // List state moved inside AnimatedContent to prevent state sharing issues during transitions
 
@@ -1549,6 +1581,9 @@ fun LibraryFoldersTab(
     ) { (playlistMode, targetPath) ->
         // Each navigation destination gets its own independant ListState
         val listState = rememberLazyListState()
+        val coroutineScope = rememberCoroutineScope()
+        val visibilityCallback by rememberUpdatedState(onLocateCurrentSongVisibilityChanged)
+        val registerActionCallback by rememberUpdatedState(onRegisterLocateCurrentSongAction)
         
         // Scroll to top when sort option changes
         LaunchedEffect(currentSortOption) {
@@ -1573,6 +1608,56 @@ fun LibraryFoldersTab(
         val songsToShow = remember(activeFolder, currentSortOption) {
             sortSongsForFolderView(activeFolder?.songs ?: emptyList(), currentSortOption)
         }.toImmutableList()
+        val currentSongId = stablePlayerState.currentSong?.id
+        val currentSongIndexInSongs = remember(songsToShow, currentSongId) {
+            currentSongId?.let { songId -> songsToShow.indexOfFirst { it.id == songId } } ?: -1
+        }
+        val currentSongListIndex = remember(itemsToShow.size, currentSongIndexInSongs) {
+            if (currentSongIndexInSongs < 0) -1 else itemsToShow.size + currentSongIndexInSongs
+        }
+        val locateCurrentSongAction: (() -> Unit)? = remember(currentSongListIndex, listState) {
+            if (currentSongListIndex < 0) {
+                null
+            } else {
+                {
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(currentSongListIndex)
+                    }
+                }
+            }
+        }
+
+        LaunchedEffect(locateCurrentSongAction) {
+            registerActionCallback(locateCurrentSongAction)
+        }
+
+        LaunchedEffect(currentSongListIndex, itemsToShow, songsToShow, listState) {
+            if (currentSongListIndex < 0 || songsToShow.isEmpty()) {
+                visibilityCallback(false)
+                return@LaunchedEffect
+            }
+
+            snapshotFlow {
+                val visibleItems = listState.layoutInfo.visibleItemsInfo
+                if (visibleItems.isEmpty()) {
+                    false
+                } else {
+                    currentSongListIndex in visibleItems.first().index..visibleItems.last().index
+                }
+            }
+                .distinctUntilChanged()
+                .collect { isVisible ->
+                    visibilityCallback(!isVisible)
+                }
+        }
+
+        DisposableEffect(Unit) {
+            onDispose {
+                visibilityCallback(false)
+                registerActionCallback(null)
+            }
+        }
+
         val shouldShowLoading = isLoading && itemsToShow.isEmpty() && songsToShow.isEmpty() && isRoot
 
         Column(modifier = Modifier.fillMaxSize()) {
@@ -1827,10 +1912,61 @@ fun LibraryFavoritesTab(
     selectedSongIds: Set<String> = emptySet(),
     onSongLongPress: (Song) -> Unit = {},
     onSongSelectionToggle: (Song) -> Unit = {},
-    getSelectionIndex: (String) -> Int? = { null }
+    getSelectionIndex: (String) -> Int? = { null },
+    onLocateCurrentSongVisibilityChanged: (Boolean) -> Unit = {},
+    onRegisterLocateCurrentSongAction: ((() -> Unit)?) -> Unit = {}
 ) {
     val stablePlayerState by playerViewModel.stablePlayerState.collectAsState()
     val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    val visibilityCallback by rememberUpdatedState(onLocateCurrentSongVisibilityChanged)
+    val registerActionCallback by rememberUpdatedState(onRegisterLocateCurrentSongAction)
+    val currentSongId = stablePlayerState.currentSong?.id
+    val currentSongListIndex = remember(favoriteSongs, currentSongId) {
+        currentSongId?.let { songId -> favoriteSongs.indexOfFirst { it.id == songId } } ?: -1
+    }
+    val locateCurrentSongAction: (() -> Unit)? = remember(currentSongListIndex, listState) {
+        if (currentSongListIndex < 0) {
+            null
+        } else {
+            {
+                coroutineScope.launch {
+                    listState.animateScrollToItem(currentSongListIndex)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(locateCurrentSongAction) {
+        registerActionCallback(locateCurrentSongAction)
+    }
+
+    LaunchedEffect(currentSongListIndex, favoriteSongs, listState) {
+        if (currentSongListIndex < 0 || favoriteSongs.isEmpty()) {
+            visibilityCallback(false)
+            return@LaunchedEffect
+        }
+
+        snapshotFlow {
+            val visibleItems = listState.layoutInfo.visibleItemsInfo
+            if (visibleItems.isEmpty()) {
+                false
+            } else {
+                currentSongListIndex in visibleItems.first().index..visibleItems.last().index
+            }
+        }
+            .distinctUntilChanged()
+            .collect { isVisible ->
+                visibilityCallback(!isVisible)
+            }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            visibilityCallback(false)
+            registerActionCallback(null)
+        }
+    }
 
     // Scroll to top when the list changes due to sorting
     LaunchedEffect(favoriteSongs) {
