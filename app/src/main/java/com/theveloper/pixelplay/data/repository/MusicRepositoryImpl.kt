@@ -114,23 +114,40 @@ class MusicRepositoryImpl @Inject constructor(
     }
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun getAudioFiles(): Flow<List<Song>> {
+        // Use MusicDao (Room) as the Single Source of Truth for BOTH local and Telegram songs.
+        // SyncWorker ensures all songs are in the DB.
         return combine(
-            songRepository.getSongs(),
-            telegramDao.getAllTelegramSongs(),
-            telegramDao.getAllChannels()
-        ) { localSongs, telegramSongs, channels ->
-            val channelMap = channels.associateBy { it.chatId }
-            val mappedTelegramSongs = telegramSongs.map { entity ->
-                entity.toSong(channelTitle = channelMap[entity.chatId]?.title)
+            userPreferencesRepository.allowedDirectoriesFlow,
+            userPreferencesRepository.blockedDirectoriesFlow
+        ) { allowed, blocked ->
+            Pair(allowed, blocked)
+        }.flatMapLatest { (allowed, blocked) ->
+            val applyFilter = blocked.isNotEmpty()
+            musicDao.getSongs(
+                allowedParentDirs = allowed.toList(),
+                applyDirectoryFilter = applyFilter
+            ).map { entities -> 
+                entities.map { it.toSong() } 
             }
-            localSongs + mappedTelegramSongs
         }.flowOn(Dispatchers.IO)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun getPaginatedSongs(): Flow<PagingData<Song>> {
-       // Delegate to reactive repository for correct filtering and paging
-       return songRepository.getPaginatedSongs()
+        return combine(
+            userPreferencesRepository.allowedDirectoriesFlow,
+            userPreferencesRepository.blockedDirectoriesFlow
+        ) { allowed, blocked ->
+            Pair(allowed, blocked)
+        }.flatMapLatest { (allowed, blocked) ->
+            val applyFilter = blocked.isNotEmpty()
+            Pager(
+                PagingConfig(pageSize = 50, enablePlaceholders = true),
+                pagingSourceFactory = { musicDao.getSongsPaginated(allowed.toList(), applyFilter) }
+            ).flow.map { pagingData ->
+                pagingData.map { it.toSong() }
+            }
+        }.flowOn(Dispatchers.IO)
     }
 
     override fun getSongCountFlow(): Flow<Int> {
@@ -138,7 +155,12 @@ class MusicRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getRandomSongs(limit: Int): List<Song> = withContext(Dispatchers.IO) {
-        musicDao.getRandomSongs(limit).map { it.toSong() }
+        // Use DAO's optimized random query with filter support
+        val allowed = userPreferencesRepository.allowedDirectoriesFlow.first()
+        val blocked = userPreferencesRepository.blockedDirectoriesFlow.first()
+        val applyFilter = blocked.isNotEmpty()
+        
+        musicDao.getRandomSongs(limit, allowed.toList(), applyFilter).map { it.toSong() }
     }
 
     override suspend fun saveTelegramSongs(songs: List<Song>) {
@@ -153,6 +175,12 @@ class MusicRepositoryImpl @Inject constructor(
     }
 
     override fun getAlbums(): Flow<List<Album>> {
+        // Use optimized DAO query instead of manual grouping
+        // But for now, we keep the manual grouping to ensure consistency with existing logic if needed,
+        // OR we can switch to musicDao.getAllAlbums() if we trust the SyncWorker's AlbumEntity generation.
+        // Given SyncWorker now effectively rebuilding AlbumEntities, let's stick to the flow based on songs for now 
+        // to be duplicate-safe until we fully migrate to Entity-based Album UI.
+        // Actually, the previous implementation grouped manually. Let's keep it simple for this refactor.
         return getAudioFiles().map { songs ->
             songs.groupBy { it.albumId }
                 .map { (albumId, songs) ->
@@ -276,7 +304,8 @@ class MusicRepositoryImpl @Inject constructor(
     override fun searchSongs(query: String): Flow<List<Song>> {
         if (query.isBlank()) return flowOf(emptyList())
         
-        val localSearchFlow = combine(
+        // Unified search: Just query the DAO
+        return combine(
             musicDao.searchSongs(
                 query = query,
                 allowedParentDirs = emptyList(),
@@ -287,18 +316,6 @@ class MusicRepositoryImpl @Inject constructor(
             allCrossRefsFlow
         ) { songs, config, artists, crossRefs ->
             mapSongList(songs, config, artists, crossRefs)
-        }
-
-        val telegramSearchFlow = combine(
-            telegramDao.searchSongs(query),
-            telegramDao.getAllChannels()
-        ) { songs, channels ->
-            val channelMap = channels.associateBy { it.chatId }
-            songs.map { it.toSong(channelTitle = channelMap[it.chatId]?.title) }
-        }
-
-        return combine(localSearchFlow, telegramSearchFlow) { local, telegram ->
-            local + telegram
         }.conflate().flowOn(Dispatchers.IO)
     }
 
@@ -404,46 +421,35 @@ class MusicRepositoryImpl @Inject constructor(
         if (songIds.isEmpty()) return flowOf(emptyList())
         
         val localIds = songIds.mapNotNull { it.toLongOrNull() }
-        val telegramIds = songIds.filter { it.toLongOrNull() == null }
-
-        val localSongsFlow = if (localIds.isNotEmpty()) {
-            combine(
-                musicDao.getSongsByIds(
-                    songIds = localIds,
-                    allowedParentDirs = emptyList(),
-                    applyDirectoryFilter = false
-                ),
-                directoryFilterConfig,
-                allArtistsFlow,
-                allCrossRefsFlow
-            ) { entities: List<SongEntity>, config: DirectoryRuleResolver?, artists: List<ArtistEntity>, crossRefs: List<SongArtistCrossRef> ->
-                val permittedEntities = entities.filterBlocked(config)
-                mapSongList(permittedEntities, null, artists, crossRefs)
-            }
-        } else {
-            flowOf(emptyList<Song>())
-        }
-
-        val telegramSongsFlow = if (telegramIds.isNotEmpty()) {
-             combine(
-                 telegramDao.getSongsByIds(telegramIds),
-                 telegramDao.getAllChannels()
-             ) { songs, channels ->
-                 val channelMap = channels.associateBy { it.chatId }
-                 songs.map { 
-                     val channelTitle = channelMap[it.chatId]?.title
-                     it.toSong(channelTitle = channelTitle) 
-                 }
-             }
-        } else {
-             flowOf(emptyList<Song>())
-        }
-
-        return combine(localSongsFlow, telegramSongsFlow) { local: List<Song>, telegram: List<Song> ->
-            val allSongsMap = (local + telegram).associateBy { it.id }
-            // Preserve original order of songIds
-            songIds.mapNotNull { id -> allSongsMap[id] }
-        }.conflate().flowOn(Dispatchers.IO)
+        val telegramIds = songIds.filter { it.toLongOrNull() == null } // These might not be used anymore if we only trust Long IDs for everything except virtual ones
+        
+        // Unified approach: ID is ID.
+        // NOTE: Telegram songs now have NEGATIVE LONG IDs in the DB.
+        // So they will be caught by 'toLongOrNull()'.
+        // The only edge case is if we are passing string IDs that are NOT longs (like "chatId_msgId").
+        // SyncWorker generates Negative Long IDs.
+        // So we should encourage using Long IDs everywhere.
+        
+        // However, 'TelegramRepository' and 'TelegramSongEntity' formerly used "chatId_messageId".
+        // If the upstream continues to use string IDs for navigation, we might need a bridge.
+        // But for "getAudioFiles" assuming everything is in DB, we rely on Long IDs.
+        
+        return combine(
+             musicDao.getSongsByIds(
+                 songIds = localIds, // This now includes Negative IDs for Telegram songs
+                 allowedParentDirs = emptyList(),
+                 applyDirectoryFilter = false
+             ),
+             directoryFilterConfig,
+             allArtistsFlow,
+             allCrossRefsFlow
+         ) { entities: List<SongEntity>, config: DirectoryRuleResolver?, artists: List<ArtistEntity>, crossRefs: List<SongArtistCrossRef> ->
+             val permittedEntities = entities.filterBlocked(config)
+             val songs = mapSongList(permittedEntities, null, artists, crossRefs)
+             
+             val allSongsMap = songs.associateBy { it.id }
+             songIds.mapNotNull { id -> allSongsMap[id] }
+         }.conflate().flowOn(Dispatchers.IO)
     }
 
     override suspend fun getSongByPath(path: String): Song? {

@@ -148,10 +148,13 @@ class TelegramRepository @Inject constructor(
                      }
                 }
                 
+                var title = audio.title.takeIf { it.isNotEmpty() }
+                var artist = audio.performer.takeIf { it.isNotEmpty() }
+
                 Song(
                     id = "${message.chatId}_${message.id}", // Unique ID
-                    title = audio.title.ifEmpty { "Unknown Title" },
-                    artist = audio.performer.ifEmpty { "Unknown Artist" },
+                    title = title ?: audio.fileName.substringBeforeLast('.').ifEmpty { "Unknown Title" },
+                    artist = artist ?: "Unknown Artist",
                     artistId = -1,
                 album = "Telegram Stream",
                 albumId = -1,
@@ -180,8 +183,8 @@ class TelegramRepository @Inject constructor(
                 }
                 
                 if (isAudioMime || isAudioExtension) {
-                    val title = document.fileName.ifEmpty { "Unknown Track" }
-                    val artist = "Telegram Audio"
+                    var title = document.fileName.substringBeforeLast('.').ifEmpty { "Unknown Track" }
+                    var artist = "Telegram Audio"
                     
                     var albumArtPath: String? = null
                     val thumbnail = document.thumbnail
