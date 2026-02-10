@@ -4,6 +4,11 @@ import android.content.ContentUris
 import android.content.Context
 import android.provider.MediaStore
 import android.util.Log
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.map
+import com.theveloper.pixelplay.data.database.MusicDao
 import com.theveloper.pixelplay.data.database.FavoritesDao
 import com.theveloper.pixelplay.data.model.Song
 import com.theveloper.pixelplay.data.observer.MediaStoreObserver
@@ -20,6 +25,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -31,6 +37,7 @@ class MediaStoreSongRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaStoreObserver: MediaStoreObserver,
     private val favoritesDao: FavoritesDao,
+    private val musicDao: MusicDao,
     private val userPreferencesRepository: UserPreferencesRepository
 ) : SongRepository {
 
@@ -41,7 +48,7 @@ class MediaStoreSongRepository @Inject constructor(
     private fun getBaseSelection(): String {
         // Relaxed filter: Remove IS_MUSIC to include all audio strings (WhatsApp, Recs, etc.)
         // We filter by duration to skip extremely short clips (likely UI sounds).
-        return "${MediaStore.Audio.Media.DURATION} >= 30000 AND ${MediaStore.Audio.Media.TITLE} != ''"
+        return "${MediaStore.Audio.Media.DURATION} >= 10000 AND ${MediaStore.Audio.Media.TITLE} != ''"
     }
 
     private suspend fun getFavoriteIds(): Set<Long> {
@@ -253,7 +260,7 @@ class MediaStoreSongRepository @Inject constructor(
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    override fun getPaginatedSongs(): Flow<androidx.paging.PagingData<Song>> {
+    override fun getPaginatedSongs(): Flow<PagingData<Song>> {
         return combine(
             mediaStoreObserver.mediaStoreChanges.onStart { emit(Unit) },
             userPreferencesRepository.allowedDirectoriesFlow,
@@ -317,5 +324,69 @@ class MediaStoreSongRepository @Inject constructor(
             Log.e("MediaStoreSongRepository", "Error getting IDs", e)
         }
         ids
+    }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun getPaginatedSongs(sortOption: com.theveloper.pixelplay.data.model.SortOption): Flow<PagingData<Song>> {
+        return userPreferencesRepository.blockedDirectoriesFlow.flatMapLatest { blockedDirs ->
+            // Compute allowed directories for Room's allow-list filtering
+            // Room doesn't support "NOT IN" efficiently or at all with list parameters in some versions,
+            // so we calculate the allowed list (All - Blocked).
+            // However, getDistinctParentDirectories() is a suspend function, so we need flow builder or just do it here.
+            
+            kotlinx.coroutines.flow.flow {
+                val allParentDirs = musicDao.getDistinctParentDirectories()
+                val normalizedBlocked = blockedDirs.map { it.trimEnd('/') }
+                
+                val allowedParentDirs = allParentDirs.filter { parentDir ->
+                    val normalizedParent = parentDir.trimEnd('/')
+                    // Check if parentDir is inside any blocked dir
+                    normalizedBlocked.none { blocked -> 
+                        normalizedParent == blocked || normalizedParent.startsWith("$blocked/")
+                    }
+                }
+                
+                val applyDirectoryFilter = blockedDirs.isNotEmpty()
+
+                emit(
+                    androidx.paging.Pager(
+                        config = androidx.paging.PagingConfig(
+                            pageSize = 50,
+                            enablePlaceholders = true,
+                            maxSize = 250
+                        ),
+                        pagingSourceFactory = {
+                            musicDao.getSongsPaginated(
+                                allowedParentDirs = allowedParentDirs,
+                                applyDirectoryFilter = applyDirectoryFilter,
+                                sortOrder = sortOption.storageKey
+                            )
+                        }
+                    ).flow
+                )
+            }.flatMapLatest { it }
+        }.map { pagingData ->
+            pagingData.map { entity ->
+                Song(
+                     id = entity.id.toString(),
+                     title = entity.title,
+                     artist = entity.artistName,
+                     artistId = entity.artistId,
+                     album = entity.albumName,
+                     albumId = entity.albumId,
+                     path = entity.filePath,
+                     contentUriString = entity.contentUriString,
+                     albumArtUriString = entity.albumArtUriString,
+                     duration = entity.duration,
+                     lyrics = entity.lyrics,
+                     dateAdded = entity.dateAdded,
+                     trackNumber = entity.trackNumber,
+                     year = entity.year,
+                     mimeType = entity.mimeType,
+                     bitrate = entity.bitrate,
+                     sampleRate = entity.sampleRate,
+                     isFavorite = false // TODO: Join with favorites if needed
+                )
+            }
+        }
     }
 }

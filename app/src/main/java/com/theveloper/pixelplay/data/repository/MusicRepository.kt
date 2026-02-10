@@ -24,7 +24,7 @@ interface MusicRepository {
      * Returns paginated songs for efficient display of large libraries.
      * @return Flow of PagingData<Song> for use with LazyPagingItems.
      */
-    fun getPaginatedSongs(): Flow<PagingData<Song>>
+    fun getPaginatedSongs(sortOption: com.theveloper.pixelplay.data.model.SortOption): Flow<PagingData<Song>>
 
     /**
      * Returns the count of songs in the library.

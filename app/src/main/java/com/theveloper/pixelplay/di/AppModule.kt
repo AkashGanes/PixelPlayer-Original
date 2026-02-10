@@ -27,8 +27,10 @@ import com.theveloper.pixelplay.data.network.lyrics.LrcLibApiService
 import com.theveloper.pixelplay.data.repository.ArtistImageRepository
 import com.theveloper.pixelplay.data.repository.LyricsRepository
 import com.theveloper.pixelplay.data.repository.LyricsRepositoryImpl
+import com.theveloper.pixelplay.data.repository.MediaStoreSongRepository
 import com.theveloper.pixelplay.data.repository.MusicRepository
 import com.theveloper.pixelplay.data.repository.MusicRepositoryImpl
+import com.theveloper.pixelplay.data.repository.SongRepository
 import com.theveloper.pixelplay.data.repository.TransitionRepository
 import com.theveloper.pixelplay.data.repository.TransitionRepositoryImpl
 import dagger.Module
@@ -163,13 +165,11 @@ object AppModule {
     fun provideLyricsRepository(
         @ApplicationContext context: Context,
         lrcLibApiService: LrcLibApiService,
-        musicDao: MusicDao,
         lyricsDao: LyricsDao
     ): LyricsRepository {
         return LyricsRepositoryImpl(
             context = context,
             lrcLibApiService = lrcLibApiService,
-            //musicDao = musicDao,
             lyricsDao = lyricsDao
         )
     }
@@ -180,13 +180,15 @@ object AppModule {
         @ApplicationContext context: Context,
         mediaStoreObserver: com.theveloper.pixelplay.data.observer.MediaStoreObserver,
         favoritesDao: FavoritesDao,
-        userPreferencesRepository: UserPreferencesRepository
-    ): com.theveloper.pixelplay.data.repository.SongRepository {
-        return com.theveloper.pixelplay.data.repository.MediaStoreSongRepository(
+        userPreferencesRepository: UserPreferencesRepository,
+        musicDao: MusicDao
+    ): SongRepository {
+        return MediaStoreSongRepository(
             context = context,
             mediaStoreObserver = mediaStoreObserver,
             favoritesDao = favoritesDao,
-            userPreferencesRepository = userPreferencesRepository
+            userPreferencesRepository = userPreferencesRepository,
+            musicDao = musicDao
         )
     }
 
@@ -198,7 +200,7 @@ object AppModule {
         searchHistoryDao: SearchHistoryDao,
         musicDao: MusicDao,
         lyricsRepository: LyricsRepository,
-        songRepository: com.theveloper.pixelplay.data.repository.SongRepository,
+        songRepository: SongRepository,
         favoritesDao: FavoritesDao,
         artistImageRepository: ArtistImageRepository
     ): MusicRepository {

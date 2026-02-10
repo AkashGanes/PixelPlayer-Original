@@ -97,6 +97,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavController
+import androidx.paging.compose.collectAsLazyPagingItems
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.imageLoader
@@ -138,6 +139,8 @@ import com.theveloper.pixelplay.data.preferences.LibraryNavigationMode
 import com.theveloper.pixelplay.data.worker.SyncProgress
 import com.theveloper.pixelplay.presentation.screens.search.components.GenreTypography
 import com.theveloper.pixelplay.presentation.components.SyncProgressBar
+import com.theveloper.pixelplay.presentation.viewmodel.LibraryViewModel
+import androidx.paging.compose.collectAsLazyPagingItems
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -210,7 +213,8 @@ val PlayerSheetCollapsedCornerRadius = 32.dp
 fun LibraryScreen(
     navController: NavController,
     playerViewModel: PlayerViewModel = hiltViewModel(),
-    playlistViewModel: PlaylistViewModel = hiltViewModel()
+    playlistViewModel: PlaylistViewModel = hiltViewModel(),
+    libraryViewModel: LibraryViewModel = hiltViewModel()
 ) {
     // La recolección de estados de alto nivel se mantiene mínima.
     val context = LocalContext.current // Added context
@@ -867,22 +871,24 @@ fun LibraryScreen(
                             )
                             when (tabTitles.getOrNull(tabIndex)?.toLibraryTabIdOrNull()) {
                                 LibraryTabId.SONGS -> {
-                                    // Use sorted allSongs from LibraryStateHolder
-                                    val playerUiState by playerViewModel.playerUiState.collectAsState()
-                                    val allSongs = playerUiState.allSongs
-                                    val isLoading = playerUiState.isLoadingInitialSongs
+                                    // Use Paging 3 flow from LibraryStateHolder
+                                    val allSongsLazyPagingItems = libraryViewModel.songsPagingFlow.collectAsLazyPagingItems()
+                                    // We can use libraryViewModel.isLoadingLibrary or similar if needed for global loading state
+                                    val isLibraryLoading by libraryViewModel.isLoadingLibrary.collectAsState()
                                     val stablePlayerState by playerViewModel.stablePlayerState.collectAsState()
                                     
                                     LibrarySongsTab(
-                                        songs = allSongs,
-                                        isLoading = isLoading,
+                                        songs = allSongsLazyPagingItems,
+                                        isLoading = isLibraryLoading,
                                         stablePlayerState = stablePlayerState,
                                         playerViewModel = playerViewModel,
                                         bottomBarHeight = bottomBarHeightDp,
                                         onMoreOptionsClick = stableOnMoreOptionsClick,
                                         isRefreshing = isRefreshing,
-                                        onRefresh = onRefresh,
-                                        // Multi-selection parameters
+                                        onRefresh = {
+                                            onRefresh()
+                                            allSongsLazyPagingItems.refresh()
+                                        },
                                         isSelectionMode = isSelectionMode,
                                         selectedSongIds = selectedSongIds,
                                         onSongLongPress = onSongLongPress,
@@ -2235,216 +2241,6 @@ fun LibraryFavoritesTab(
     }
 }
 
-@androidx.annotation.OptIn(UnstableApi::class)
-@Composable
-fun LibrarySongsTab(
-    songs: ImmutableList<Song>,
-    isLoadingInitial: Boolean,
-    // isLoadingMore: Boolean, // Removed
-    // canLoadMore: Boolean, // Removed
-    playerViewModel: PlayerViewModel,
-    bottomBarHeight: Dp,
-    onMoreOptionsClick: (Song) -> Unit,
-    isRefreshing: Boolean,
-    onRefresh: () -> Unit
-) {
-    val stablePlayerState by playerViewModel.stablePlayerState.collectAsState()
-    val listState = rememberLazyListState()
-    val context = LocalContext.current
-    val imageLoader = context.imageLoader
-
-    // Prefetching logic for LibrarySongsTab
-    LaunchedEffect(songs, listState) {
-        snapshotFlow { listState.layoutInfo }
-            .distinctUntilChanged()
-            .collect { layoutInfo ->
-                val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                if (visibleItemsInfo.isNotEmpty() && songs.isNotEmpty()) {
-                    val lastVisibleItemIndex = visibleItemsInfo.last().index
-                    val totalItemsCount = songs.size
-                    val prefetchThreshold = 10 // Start prefetching when 10 items are left
-                    val prefetchCount = 20    // Prefetch next 20 items
-
-                    if (totalItemsCount > lastVisibleItemIndex + 1 && lastVisibleItemIndex + prefetchThreshold >= totalItemsCount - prefetchCount ) {
-                         val startIndexToPrefetch = lastVisibleItemIndex + 1
-                         val endIndexToPrefetch = (startIndexToPrefetch + prefetchCount).coerceAtMost(totalItemsCount)
-
-                        (startIndexToPrefetch until endIndexToPrefetch).forEach { indexToPrefetch ->
-                            val song = songs.getOrNull(indexToPrefetch)
-                            song?.albumArtUriString?.let { uri ->
-                                val request = ImageRequest.Builder(context)
-                                    .data(uri)
-                                    .size(Size(168, 168)) // Same size as in EnhancedSongListItem
-                                    .build()
-                                imageLoader.enqueue(request)
-                            }
-                        }
-                    }
-                }
-            }
-    }
-
-    if (isLoadingInitial && songs.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            LoadingIndicator() // O Shimmer para la lista completa
-        }
-    } else {
-        // Determine content based on loading state and data availability
-        when {
-            isLoadingInitial && songs.isEmpty() -> { // Este caso ya está cubierto arriba, pero es bueno para claridad
-                val allSongsPullToRefreshState = rememberPullToRefreshState()
-                PullToRefreshBox(
-                    isRefreshing = isRefreshing,
-                    onRefresh = onRefresh,
-                    state = allSongsPullToRefreshState,
-                    modifier = Modifier.fillMaxSize(),
-                    indicator = {
-                        PullToRefreshDefaults.LoadingIndicator(
-                            state = allSongsPullToRefreshState,
-                            isRefreshing = isRefreshing,
-                            modifier = Modifier.align(Alignment.TopCenter)
-                        )
-                    }
-                ) {
-                    LazyColumn(
-                        modifier = Modifier
-                            .padding(start = 12.dp, end = 12.dp, bottom = 6.dp)
-                            .clip(
-                                RoundedCornerShape(
-                                    topStart = 26.dp,
-                                    topEnd = 26.dp,
-                                    bottomStart = PlayerSheetCollapsedCornerRadius,
-                                    bottomEnd = PlayerSheetCollapsedCornerRadius
-                                )
-                            )
-                            .fillMaxSize(),
-                        state = listState,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(bottom = bottomBarHeight + MiniPlayerHeight + ListExtraBottomGap)
-                    ) {
-                        items(15) {
-                            EnhancedSongListItem(
-                                song = Song.emptySong(), isPlaying = false, isLoading = true,
-                                isCurrentSong = songs.isNotEmpty() && stablePlayerState.currentSong == Song.emptySong(),
-                                onMoreOptionsClick = {}, onClick = {}
-                            )
-                        }
-                    }
-                }
-            }
-
-            songs.isEmpty() && !isLoadingInitial -> { // canLoadMore removed from condition
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.rounded_music_off_24),
-                            contentDescription = "No songs found",
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text("No songs found in your library.", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Try rescanning your library in settings if you have music on your device.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
-
-            else -> {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    val artistsPullToRefreshState = rememberPullToRefreshState()
-                    PullToRefreshBox(
-                        isRefreshing = isRefreshing,
-                        onRefresh = onRefresh,
-                        state = artistsPullToRefreshState,
-                        modifier = Modifier.fillMaxSize(),
-                        indicator = {
-                            PullToRefreshDefaults.LoadingIndicator(
-                                state = artistsPullToRefreshState,
-                                isRefreshing = isRefreshing,
-                                modifier = Modifier.align(Alignment.TopCenter)
-                            )
-                        }
-                    ) {
-                        LazyColumn(
-                            modifier = Modifier
-                                .padding(start = 12.dp, end = 12.dp, bottom = 6.dp)
-                                .clip(
-                                    RoundedCornerShape(
-                                        topStart = 26.dp,
-                                        topEnd = 26.dp,
-                                        bottomStart = PlayerSheetCollapsedCornerRadius,
-                                        bottomEnd = PlayerSheetCollapsedCornerRadius
-                                    )
-                                ),
-                            state = listState,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(bottom = bottomBarHeight + MiniPlayerHeight + 30.dp)
-                        ) {
-                            item(key = "songs_top_spacer") { Spacer(Modifier.height(0.dp)) }
-                            items(songs, key = { it.id }) { song ->
-                                val isPlayingThisSong =
-                                    song.id == stablePlayerState.currentSong?.id && stablePlayerState.isPlaying
-
-                                // Estabilizar lambdas
-                                val rememberedOnMoreOptionsClick: (Song) -> Unit =
-                                    remember(onMoreOptionsClick) {
-                                        // Esta es la lambda que `remember` ejecutará para producir el valor recordado.
-                                        // El valor recordado es la propia función `onMoreOptionsClick` (o una lambda que la llama).
-                                        { songFromListItem -> // Esta es la lambda (Song) -> Unit que se recuerda
-                                            onMoreOptionsClick(songFromListItem)
-                                        }
-                                    }
-                                val rememberedOnClick: () -> Unit = remember(song) {
-                                    { playerViewModel.showAndPlaySong(song) }
-                                }
-
-                                EnhancedSongListItem(
-                                    song = song,
-                                    isPlaying = isPlayingThisSong,
-                                    isCurrentSong = stablePlayerState.currentSong?.id == song.id,
-                                    isLoading = false,
-                                    onMoreOptionsClick = rememberedOnMoreOptionsClick,
-                                    onClick = rememberedOnClick
-                                )
-                            }
-                            // isLoadingMore indicator removed as all songs are loaded at once.
-                            // if (isLoadingMore) {
-                            //     item {
-                            //         Box(
-                            //             Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                            //             contentAlignment = Alignment.Center
-                            //         ) { CircularProgressIndicator() }
-                            //     }
-                            // }
-                        }
-                    }
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(10.dp)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.surface, Color.Transparent
-                                )
-                            )
-                        )
-                )
-            }
-        }
-    }
-}
 
 /**
  * Paginated version of LibrarySongsTab using Paging 3 for efficient memory usage.

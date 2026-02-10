@@ -104,9 +104,9 @@ class MusicRepositoryImpl @Inject constructor(
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    override fun getPaginatedSongs(): Flow<PagingData<Song>> {
-       // Delegate to reactive repository for correct filtering and paging
-       return songRepository.getPaginatedSongs()
+    override fun getPaginatedSongs(sortOption: com.theveloper.pixelplay.data.model.SortOption): Flow<PagingData<Song>> {
+        // Delegate to reactive repository for correct filtering and paging
+        return songRepository.getPaginatedSongs(sortOption)
     }
 
     override fun getSongCountFlow(): Flow<Int> {
@@ -171,10 +171,9 @@ class MusicRepositoryImpl @Inject constructor(
     }
 
     override fun getSongsForAlbum(albumId: Long): Flow<List<Song>> {
-        return getAudioFiles().map { songs ->
-            songs.filter { it.albumId == albumId }
-                .sortedBy { it.trackNumber }
-        }
+        return musicDao.getSongsByAlbumId(albumId).map { entities ->
+            entities.map { it.toSong() }.sortedBy { it.trackNumber }
+        }.flowOn(Dispatchers.IO)
     }
 
     override fun getArtistById(artistId: Long): Flow<Artist?> {
@@ -182,23 +181,15 @@ class MusicRepositoryImpl @Inject constructor(
     }
 
     override fun getArtistsForSong(songId: Long): Flow<List<Artist>> {
-        // Simple implementation assuming single artist per song as per MediaStore
-        // For multi-artist, we would parse the separator/delimiter here.
-        return getAudioFiles().map { songs ->
-            val song = songs.find { it.id == songId.toString() }
-            if (song != null) {
-                listOf(Artist(id = song.artistId, name = song.artist, songCount = 1, imageUrl = null))
-            } else {
-                emptyList()
-            }
-        }
+        return musicDao.getArtistsForSong(songId).map { entities ->
+            entities.map { it.toArtist() }
+        }.flowOn(Dispatchers.IO)
     }
 
     override fun getSongsForArtist(artistId: Long): Flow<List<Song>> {
-        return getAudioFiles().map { songs ->
-            songs.filter { it.artistId == artistId }
-                .sortedBy { it.title }
-        }
+        return musicDao.getSongsForArtist(artistId).map { entities ->
+            entities.map { it.toSong() }
+        }.flowOn(Dispatchers.IO)
     }
 
     override suspend fun getAllUniqueAudioDirectories(): Set<String> = withContext(Dispatchers.IO) {

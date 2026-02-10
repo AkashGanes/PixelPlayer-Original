@@ -241,11 +241,22 @@ interface MusicDao {
     @Query("""
         SELECT * FROM songs
         WHERE (:applyDirectoryFilter = 0 OR parent_directory_path IN (:allowedParentDirs))
-        ORDER BY title ASC
+        ORDER BY
+            CASE WHEN :sortOrder = 'song_default_order' THEN track_number END ASC,
+            CASE WHEN :sortOrder = 'song_title_az' THEN title END ASC,
+            CASE WHEN :sortOrder = 'song_title_za' THEN title END DESC,
+            CASE WHEN :sortOrder = 'song_artist' THEN artist_name END ASC,
+            CASE WHEN :sortOrder = 'song_album' THEN album_name END ASC,
+            CASE WHEN :sortOrder = 'song_date_added' THEN date_added END DESC,
+            CASE WHEN :sortOrder = 'song_duration' THEN duration END DESC,
+            
+            -- Secondary sort falls back to title for consistency
+            title ASC
     """)
     fun getSongsPaginated(
         allowedParentDirs: List<String>,
-        applyDirectoryFilter: Boolean
+        applyDirectoryFilter: Boolean,
+        sortOrder: String
     ): PagingSource<Int, SongEntity>
 
     // --- Album Queries ---
