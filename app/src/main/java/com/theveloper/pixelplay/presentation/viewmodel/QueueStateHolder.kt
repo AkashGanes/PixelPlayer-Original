@@ -2,6 +2,8 @@ package com.theveloper.pixelplay.presentation.viewmodel
 
 import com.theveloper.pixelplay.data.model.Song
 import com.theveloper.pixelplay.utils.QueueUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -98,5 +100,22 @@ class QueueStateHolder @Inject constructor() {
         saveOriginalQueueState(songs, queueName)
         val startIndex = songs.indexOf(startSong).coerceAtLeast(0)
         return QueueUtils.buildAnchoredShuffleQueue(songs, startIndex)
+    }
+
+    /**
+     * Suspendable variant for large queues.
+     * Runs the heavy shuffle computation on Default dispatcher to avoid UI stalls.
+     */
+    suspend fun prepareShuffledQueueSuspending(songs: List<Song>, queueName: String): Pair<List<Song>, Song>? {
+        if (songs.isEmpty()) return null
+
+        val startSong = songs.random()
+        saveOriginalQueueState(songs, queueName)
+
+        val startIndex = songs.indexOf(startSong).coerceAtLeast(0)
+        val shuffledQueue = withContext(Dispatchers.Default) {
+            QueueUtils.buildAnchoredShuffleQueueSuspending(songs, startIndex)
+        }
+        return Pair(shuffledQueue, startSong)
     }
 }

@@ -10,7 +10,7 @@ object QueueUtils {
      * Batch size for yielding during shuffle of very large collections.
      * Every [SHUFFLE_YIELD_BATCH] swaps we yield to avoid blocking the caller coroutine.
      */
-    private const val SHUFFLE_YIELD_BATCH = 2_000
+    private const val SHUFFLE_YIELD_BATCH = 512
 
     fun <T> fisherYatesCopy(source: List<T>, random: Random = Random.Default): List<T> {
         if (source.size <= 1) return source.toList()
@@ -59,15 +59,25 @@ object QueueUtils {
      * Suspendable version of [generateShuffleOrder] that yields periodically for large queues.
      * This prevents ANR when shuffling 10,000+ songs by cooperating with the coroutine dispatcher.
      */
-    private suspend fun generateShuffleOrderSuspending(size: Int, anchorIndex: Int, random: Random = Random.Default): IntArray {
+    private suspend fun generateShuffleOrderSuspending(
+        size: Int,
+        anchorIndex: Int,
+        random: Random = Random.Default
+    ): IntArray {
         if (size <= 1) return IntArray(size) { it }
 
         val clampedAnchor = anchorIndex.coerceIn(0, size - 1)
         val pool = IntArray(size - 1)
         var cursor = 0
+        var workSinceYield = 0
         for (i in 0 until size) {
             if (i != clampedAnchor) {
                 pool[cursor++] = i
+            }
+            workSinceYield++
+            if (workSinceYield >= SHUFFLE_YIELD_BATCH) {
+                workSinceYield = 0
+                yield()
             }
         }
 
@@ -79,13 +89,22 @@ object QueueUtils {
                 pool[i] = pool[swapIndex]
                 pool[swapIndex] = tmp
             }
-            if (i % SHUFFLE_YIELD_BATCH == 0) yield()
+            workSinceYield++
+            if (workSinceYield >= SHUFFLE_YIELD_BATCH) {
+                workSinceYield = 0
+                yield()
+            }
         }
 
         val order = IntArray(size)
         var poolIndex = 0
         for (i in 0 until size) {
             order[i] = if (i == clampedAnchor) clampedAnchor else pool[poolIndex++]
+            workSinceYield++
+            if (workSinceYield >= SHUFFLE_YIELD_BATCH) {
+                workSinceYield = 0
+                yield()
+            }
         }
         return order
     }

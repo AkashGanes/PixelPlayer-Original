@@ -1900,7 +1900,12 @@ class PlayerViewModel @Inject constructor(
             // If shuffle is persistent and currently ON, we shuffle the new songs immediately
             val finalSongsToPlay = if (isPersistent && isShuffleOn) {
                 // Shuffle the list but make sure the song you clicked stays at its current index or starts first
-                QueueUtils.buildAnchoredShuffleQueueSuspending(validSongs, validSongs.indexOf(validStartSong).coerceAtLeast(0))
+                withContext(Dispatchers.Default) {
+                    QueueUtils.buildAnchoredShuffleQueueSuspending(
+                        validSongs,
+                        validSongs.indexOf(validStartSong).coerceAtLeast(0)
+                    )
+                }
             } else {
                 // Otherwise, just use the normal sequential order
                 validSongs
@@ -1914,7 +1919,7 @@ class PlayerViewModel @Inject constructor(
     // Start playback with shuffle enabled in one coroutine to avoid racing queue updates
     fun playSongsShuffled(songsToPlay: List<Song>, queueName: String = "None", playlistId: String? = null) {
         viewModelScope.launch {
-            val result = queueStateHolder.prepareShuffledQueue(songsToPlay, queueName)
+            val result = queueStateHolder.prepareShuffledQueueSuspending(songsToPlay, queueName)
             if (result == null) {
                 sendToast("No songs to shuffle.")
                 return@launch

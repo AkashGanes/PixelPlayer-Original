@@ -1647,26 +1647,27 @@ private fun QueueMiniPlayer(
     val bodyTapInteractionSource = remember { MutableInteractionSource() }
     val corners = 20.dp
     val albumCorners = 10.dp
-    val shape = AbsoluteSmoothCornerShape(
-        cornerRadiusTR = corners,
-        smoothnessAsPercentTL = 60,
-        cornerRadiusTL = corners,
-        smoothnessAsPercentTR = 60,
-        cornerRadiusBR = corners,
-        smoothnessAsPercentBL = 60,
-        cornerRadiusBL = corners,
-        smoothnessAsPercentBR = 60
-    )
-    val albumShape = AbsoluteSmoothCornerShape(
-        cornerRadiusTR = albumCorners,
-        smoothnessAsPercentTL = 60,
-        cornerRadiusTL = albumCorners,
-        smoothnessAsPercentTR = 60,
-        cornerRadiusBR = albumCorners,
-        smoothnessAsPercentBL = 60,
-        cornerRadiusBL = albumCorners,
-        smoothnessAsPercentBR = 60
-    )
+//    val shape = AbsoluteSmoothCornerShape(
+//        cornerRadiusTR = corners,
+//        smoothnessAsPercentTL = 60,
+//        cornerRadiusTL = corners,
+//        smoothnessAsPercentTR = 60,
+//        cornerRadiusBR = corners,
+//        smoothnessAsPercentBL = 60,
+//        cornerRadiusBL = corners,
+//        smoothnessAsPercentBR = 60
+//    )
+    val albumShape = RoundedCornerShape(albumCorners)
+//        AbsoluteSmoothCornerShape(
+//            cornerRadiusTR = albumCorners,
+//            smoothnessAsPercentTL = 60,
+//            cornerRadiusTL = albumCorners,
+//            smoothnessAsPercentTR = 60,
+//            cornerRadiusBR = albumCorners,
+//            smoothnessAsPercentBL = 60,
+//            cornerRadiusBL = albumCorners,
+//            smoothnessAsPercentBR = 60
+//        )
 
     Surface(
         modifier = modifier
@@ -1679,7 +1680,7 @@ private fun QueueMiniPlayer(
                     )
                 )
             ),
-        shape = shape,
+        //shape = shape,
         tonalElevation = 10.dp,
         color = Color.Transparent
     ) {
@@ -1793,32 +1794,34 @@ fun QueuePlaylistSongItem(
         label = "cornerRadiusAnimation"
     )
 
-    val itemShape = AbsoluteSmoothCornerShape(
-        cornerRadiusTR = cornerRadius,
-        smoothnessAsPercentTL = 60,
-        cornerRadiusTL = cornerRadius,
-        smoothnessAsPercentTR = 60,
-        cornerRadiusBR = cornerRadius,
-        smoothnessAsPercentBL = 60,
-        cornerRadiusBL = cornerRadius,
-        smoothnessAsPercentBR = 60
-    )
+    val itemShape = RoundedCornerShape(cornerRadius)
+//        AbsoluteSmoothCornerShape(
+//            cornerRadiusTR = cornerRadius,
+//            smoothnessAsPercentTL = 60,
+//            cornerRadiusTL = cornerRadius,
+//            smoothnessAsPercentTR = 60,
+//            cornerRadiusBR = cornerRadius,
+//            smoothnessAsPercentBL = 60,
+//            cornerRadiusBL = cornerRadius,
+//            smoothnessAsPercentBR = 60
+//        )
 
     val albumCornerRadius by animateDpAsState(
         targetValue = if (isCurrentSong) 60.dp else 8.dp,
         label = "cornerRadiusAnimation"
     )
 
-    val albumShape = AbsoluteSmoothCornerShape(
-        cornerRadiusTR = albumCornerRadius,
-        smoothnessAsPercentTL = 60,
-        cornerRadiusTL = albumCornerRadius,
-        smoothnessAsPercentTR = 60,
-        cornerRadiusBR = albumCornerRadius,
-        smoothnessAsPercentBL = 60,
-        cornerRadiusBL = albumCornerRadius,
-        smoothnessAsPercentBR = 60
-    )
+    val albumShape = RoundedCornerShape(albumCornerRadius)
+//        AbsoluteSmoothCornerShape(
+//            cornerRadiusTR = albumCornerRadius,
+//            smoothnessAsPercentTL = 60,
+//            cornerRadiusTL = albumCornerRadius,
+//            smoothnessAsPercentTR = 60,
+//            cornerRadiusBR = albumCornerRadius,
+//            smoothnessAsPercentBL = 60,
+//            cornerRadiusBL = albumCornerRadius,
+//            smoothnessAsPercentBR = 60
+//        )
 
     val elevation by animateDpAsState(
         targetValue = if (isDragging) 4.dp else 1.dp,
@@ -1838,7 +1841,7 @@ fun QueuePlaylistSongItem(
     val dismissState = remember(swipeStateIdentity) {
         SwipeToDismissBoxState(
             initialValue = SwipeToDismissBoxValue.Settled,
-            positionalThreshold = { totalDistance -> totalDistance * 0.28f }
+            positionalThreshold = { totalDistance -> totalDistance * 0.18f }
         )
     }
     var dismissHandled by remember { mutableStateOf(false) }

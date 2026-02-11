@@ -118,30 +118,32 @@ fun EnhancedSongListItem(
         if (customShape != null && (!isCurrentSong || isLoading)) {
             customShape
         } else {
-            AbsoluteSmoothCornerShape(
-                cornerRadiusTL = animatedCornerRadius,
-                smoothnessAsPercentTR = 60,
-                cornerRadiusTR = animatedCornerRadius,
-                smoothnessAsPercentBR = 60,
-                cornerRadiusBL = animatedCornerRadius,
-                smoothnessAsPercentBL = 60,
-                cornerRadiusBR = animatedCornerRadius,
-                smoothnessAsPercentTL = 60
-            )
+            RoundedCornerShape(animatedCornerRadius)
+//            AbsoluteSmoothCornerShape(
+//                cornerRadiusTL = animatedCornerRadius,
+//                smoothnessAsPercentTR = 60,
+//                cornerRadiusTR = animatedCornerRadius,
+//                smoothnessAsPercentBR = 60,
+//                cornerRadiusBL = animatedCornerRadius,
+//                smoothnessAsPercentBL = 60,
+//                cornerRadiusBR = animatedCornerRadius,
+//                smoothnessAsPercentTL = 60
+//            )
         }
     }
 
     val albumShape = remember(animatedAlbumCornerRadius) {
-        AbsoluteSmoothCornerShape(
-            cornerRadiusTL = animatedAlbumCornerRadius,
-            smoothnessAsPercentTR = 60,
-            cornerRadiusTR = animatedAlbumCornerRadius,
-            smoothnessAsPercentBR = 60,
-            cornerRadiusBL = animatedAlbumCornerRadius,
-            smoothnessAsPercentBL = 60,
-            cornerRadiusBR = animatedAlbumCornerRadius,
-            smoothnessAsPercentTL = 60
-        )
+        RoundedCornerShape(animatedAlbumCornerRadius)
+//        AbsoluteSmoothCornerShape(
+//            cornerRadiusTL = animatedAlbumCornerRadius,
+//            smoothnessAsPercentTR = 60,
+//            cornerRadiusTR = animatedAlbumCornerRadius,
+//            smoothnessAsPercentBR = 60,
+//            cornerRadiusBL = animatedAlbumCornerRadius,
+//            smoothnessAsPercentBL = 60,
+//            cornerRadiusBR = animatedAlbumCornerRadius,
+//            smoothnessAsPercentTL = 60
+//        )
     }
 
     val colors = MaterialTheme.colorScheme

@@ -13,9 +13,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import com.theveloper.pixelplay.data.model.Song
 import com.google.android.gms.cast.MediaStatus
 import timber.log.Timber
@@ -445,12 +447,17 @@ class PlaybackStateHolder @Inject constructor(
                         queueStateHolder.saveOriginalQueueState(currentSongs, currentQueueSourceName)
                     }
 
-                    val currentIndex = player.currentMediaItemIndex.coerceIn(0, (currentSongs.size - 1).coerceAtLeast(0))
+                    val currentMediaId = player.currentMediaItem?.mediaId ?: currentSong?.id
+                    val currentIndex = currentMediaId
+                        ?.let { mediaId -> currentSongs.indexOfFirst { it.id == mediaId }.takeIf { it >= 0 } }
+                        ?: player.currentMediaItemIndex.coerceIn(0, (currentSongs.size - 1).coerceAtLeast(0))
                     val currentPosition = player.currentPosition
-                    val currentMediaId = player.currentMediaItem?.mediaId
+                    val wasPlaying = player.isPlaying
 
-                    // Use suspending shuffle for large queues to avoid blocking
-                    val shuffledQueue = QueueUtils.buildAnchoredShuffleQueueSuspending(currentSongs, currentIndex)
+                    // Run heavy shuffle work off main to keep UI and playback responsive.
+                    val shuffledQueue = withContext(Dispatchers.Default) {
+                        QueueUtils.buildAnchoredShuffleQueueSuspending(currentSongs, currentIndex)
+                    }
 
                     // For large queues, use bulk replace (1 IPC call) instead of
                     // per-item moveMediaItem (n IPC calls) which freezes the UI.
@@ -465,6 +472,9 @@ class PlaybackStateHolder @Inject constructor(
 
                     updateQueueCallback(shuffledQueue)
                     _stablePlayerState.update { it.copy(isShuffleEnabled = true) }
+                    if (wasPlaying && !player.isPlaying) {
+                        player.play()
+                    }
 
                     scope?.launch {
                         if (userPreferencesRepository.persistentShuffleEnabledFlow.first()) {
@@ -473,7 +483,7 @@ class PlaybackStateHolder @Inject constructor(
                     }
                 } else {
                     // Disable Shuffle
-                   scope?.launch {
+                    scope?.launch {
                         if (userPreferencesRepository.persistentShuffleEnabledFlow.first()) {
                             userPreferencesRepository.setShuffleOn(false)
                         }
@@ -485,8 +495,9 @@ class PlaybackStateHolder @Inject constructor(
                     }
 
                     val originalQueue = queueStateHolder.originalQueueOrder
+                    val wasPlaying = player.isPlaying
                     val currentPosition = player.currentPosition
-                    val currentSongId = currentSong?.id
+                    val currentSongId = currentSong?.id ?: player.currentMediaItem?.mediaId
                     val originalIndex = originalQueue.indexOfFirst { it.id == currentSongId }.takeIf { it >= 0 }
 
                     if (originalIndex == null) {
@@ -506,6 +517,9 @@ class PlaybackStateHolder @Inject constructor(
 
                     updateQueueCallback(originalQueue)
                     _stablePlayerState.update { it.copy(isShuffleEnabled = false) }
+                    if (wasPlaying && !player.isPlaying) {
+                        player.play()
+                    }
                 }
             }
         }
