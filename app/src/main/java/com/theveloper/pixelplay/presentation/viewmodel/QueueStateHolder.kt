@@ -1,6 +1,9 @@
 package com.theveloper.pixelplay.presentation.viewmodel
 
 import com.theveloper.pixelplay.data.model.Song
+import com.theveloper.pixelplay.utils.QueueUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -56,22 +59,22 @@ class QueueStateHolder @Inject constructor() {
     
     /**
      * Create a shuffled version of a queue, keeping the current song at the start.
+     * Uses Fisher-Yates via [QueueUtils] for uniform randomness.
      */
     fun createShuffledQueue(
         currentQueue: List<Song>,
         currentSongId: String?
     ): List<Song> {
         if (currentQueue.isEmpty()) return emptyList()
-        
-        val currentSong = currentQueue.find { it.id == currentSongId }
-        val otherSongs = currentQueue.filter { it.id != currentSongId }.shuffled()
-        
-        return if (currentSong != null) {
-            listOf(currentSong) + otherSongs
+
+        val currentIndex = currentQueue.indexOfFirst { it.id == currentSongId }
+        return if (currentIndex >= 0) {
+            QueueUtils.buildAnchoredShuffleQueue(currentQueue, currentIndex)
         } else {
-            otherSongs.shuffled()
+            QueueUtils.fisherYatesCopy(currentQueue)
         }
     }
+
     /**
      * Prepares a list for shuffled playback.
      * 1. Saves original queue.
@@ -80,13 +83,13 @@ class QueueStateHolder @Inject constructor() {
      */
     fun prepareShuffledQueue(songs: List<Song>, queueName: String): Pair<List<Song>, Song>? {
         if (songs.isEmpty()) return null
-        
+
         val startSong = songs.random()
         saveOriginalQueueState(songs, queueName)
-        
-        val otherSongs = songs.filter { it.id != startSong.id }.shuffled()
-        val shuffledQueue = listOf(startSong) + otherSongs
-        
+
+        val startIndex = songs.indexOf(startSong).coerceAtLeast(0)
+        val shuffledQueue = QueueUtils.buildAnchoredShuffleQueue(songs, startIndex)
+
         return Pair(shuffledQueue, startSong)
     }
 
@@ -94,8 +97,25 @@ class QueueStateHolder @Inject constructor() {
      * Prepares a list for shuffled playback with a specific start song.
      */
     fun prepareShuffledQueueWithStart(songs: List<Song>, startSong: Song, queueName: String): List<Song> {
-         saveOriginalQueueState(songs, queueName)
-         val otherSongs = songs.filter { it.id != startSong.id }.shuffled()
-         return listOf(startSong) + otherSongs
+        saveOriginalQueueState(songs, queueName)
+        val startIndex = songs.indexOf(startSong).coerceAtLeast(0)
+        return QueueUtils.buildAnchoredShuffleQueue(songs, startIndex)
+    }
+
+    /**
+     * Suspendable variant for large queues.
+     * Runs the heavy shuffle computation on Default dispatcher to avoid UI stalls.
+     */
+    suspend fun prepareShuffledQueueSuspending(songs: List<Song>, queueName: String): Pair<List<Song>, Song>? {
+        if (songs.isEmpty()) return null
+
+        val startSong = songs.random()
+        saveOriginalQueueState(songs, queueName)
+
+        val startIndex = songs.indexOf(startSong).coerceAtLeast(0)
+        val shuffledQueue = withContext(Dispatchers.Default) {
+            QueueUtils.buildAnchoredShuffleQueueSuspending(songs, startIndex)
+        }
+        return Pair(shuffledQueue, startSong)
     }
 }

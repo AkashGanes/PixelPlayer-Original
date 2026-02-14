@@ -15,12 +15,12 @@ import kotlinx.collections.immutable.persistentListOf
 
 @Immutable
 data class PlayerUiState(
-    val allSongs: ImmutableList<Song> = persistentListOf(),
+    // val allSongs: ImmutableList<Song> = persistentListOf(), // REMOVED
     val currentPosition: Long = 0L,
     val currentPlaybackQueue: ImmutableList<Song> = persistentListOf(),
     val currentQueueSourceName: String = "All Songs",
-    val albums: ImmutableList<Album> = persistentListOf(),
-    val artists: ImmutableList<Artist> = persistentListOf(),
+    // val albums: ImmutableList<Album> = persistentListOf(), // REMOVED
+    // val artists: ImmutableList<Artist> = persistentListOf(), // REMOVED
     val searchResults: ImmutableList<SearchResultItem> = persistentListOf(),
     val musicFolders: ImmutableList<MusicFolder> = persistentListOf(),
     val sortOption: SortOption = SortOption.SongDefaultOrder,
@@ -51,7 +51,7 @@ data class PlayerUiState(
     val currentFolderSortOption: SortOption = SortOption.FolderNameAZ,
     val folderBackGestureNavigationEnabled: Boolean = false,
     val currentSongSortOption: SortOption = SortOption.SongTitleAZ,
-    val songCount: Int = 0,
+    // val songCount: Int = 0, // REMOVED
     val isGeneratingAiMetadata: Boolean = false,
     val searchHistory: ImmutableList<SearchHistoryItem> = persistentListOf(),
     val searchQuery: String = "",

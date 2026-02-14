@@ -694,7 +694,7 @@ private fun FileExplorerHeader(
                     // Spacer inicial para que el primer ítem no quede pegado al borde o debajo del fade
                     item { Spacer(modifier = Modifier.width(4.dp)) }
 
-                    items(breadcrumbs.size) { index ->
+                    items(breadcrumbs.size, key = { breadcrumbs[it].path }) { index ->
                         val file = breadcrumbs[index]
                         val isRoot = file.path == rootDirectory.path
                         val isLast = index == breadcrumbs.lastIndex

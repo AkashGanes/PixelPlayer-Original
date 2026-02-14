@@ -303,7 +303,7 @@ fun AboutScreen(
     }
 
     var showBrickBreaker by remember { mutableStateOf(false) }
-    val stablePlayerState by viewModel.stablePlayerState.collectAsState()
+    val stablePlayerState by viewModel.stablePlayerStateInfrequent.collectAsState()
     val currentSong = stablePlayerState.currentSong
 
     Box(

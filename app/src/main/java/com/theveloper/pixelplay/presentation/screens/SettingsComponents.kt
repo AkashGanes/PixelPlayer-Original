@@ -363,6 +363,7 @@ fun SliderSettingsItem(
 fun RefreshLibraryItem(
         isSyncing: Boolean,
         syncProgress: SyncProgress,
+        activeOperationLabel: String? = null,
         onFullSync: () -> Unit,
         onRebuild: () -> Unit
 ) {
@@ -443,6 +444,7 @@ fun RefreshLibraryItem(
 
             if (isSyncing) {
                 Spacer(modifier = Modifier.height(12.dp))
+                val phaseLabel = activeOperationLabel ?: syncPhaseLabel(syncProgress.phase)
                 if (syncProgress.hasProgress) {
                     LinearProgressIndicator(
                             progress = { syncProgress.progress },
@@ -451,7 +453,7 @@ fun RefreshLibraryItem(
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                             text =
-                                    "Scanned ${syncProgress.currentCount} of ${syncProgress.totalCount} songs",
+                                    "$phaseLabel • ${(syncProgress.progress * 100).toInt()}% (${syncProgress.currentCount}/${syncProgress.totalCount})",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -459,7 +461,7 @@ fun RefreshLibraryItem(
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                            text = "Refreshing library…",
+                            text = "$phaseLabel…",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -468,6 +470,16 @@ fun RefreshLibraryItem(
         }
     }
 }
+
+private fun syncPhaseLabel(phase: SyncProgress.SyncPhase): String =
+        when (phase) {
+            SyncProgress.SyncPhase.IDLE -> "Preparing sync"
+            SyncProgress.SyncPhase.FETCHING_MEDIASTORE -> "Reading MediaStore"
+            SyncProgress.SyncPhase.PROCESSING_FILES -> "Processing tracks"
+            SyncProgress.SyncPhase.SAVING_TO_DATABASE -> "Saving to database"
+            SyncProgress.SyncPhase.SCANNING_LRC -> "Scanning lyrics files"
+            SyncProgress.SyncPhase.COMPLETING -> "Completing sync"
+        }
 
 @Composable
 fun RefreshLyricsItem(

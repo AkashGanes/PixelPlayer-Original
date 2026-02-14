@@ -325,7 +325,7 @@ private fun PickResultContent(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(bottom = 8.dp)
     ) {
-        items(results) { result ->
+        items(results, key = { it.record.id }) { result ->
             ResultItemCard(result = result, onClick = { onPickResult(result) })
         }
 

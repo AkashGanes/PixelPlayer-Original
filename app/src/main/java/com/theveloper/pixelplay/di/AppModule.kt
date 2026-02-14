@@ -27,10 +27,13 @@ import com.theveloper.pixelplay.data.network.lyrics.LrcLibApiService
 import com.theveloper.pixelplay.data.repository.ArtistImageRepository
 import com.theveloper.pixelplay.data.repository.LyricsRepository
 import com.theveloper.pixelplay.data.repository.LyricsRepositoryImpl
+import com.theveloper.pixelplay.data.repository.MediaStoreSongRepository
 import com.theveloper.pixelplay.data.repository.MusicRepository
 import com.theveloper.pixelplay.data.repository.MusicRepositoryImpl
+import com.theveloper.pixelplay.data.repository.SongRepository
 import com.theveloper.pixelplay.data.repository.TransitionRepository
 import com.theveloper.pixelplay.data.repository.TransitionRepositoryImpl
+import com.theveloper.pixelplay.data.repository.FolderTreeBuilder
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -177,13 +180,11 @@ object AppModule {
     fun provideLyricsRepository(
         @ApplicationContext context: Context,
         lrcLibApiService: LrcLibApiService,
-        musicDao: MusicDao,
         lyricsDao: LyricsDao
     ): LyricsRepository {
         return LyricsRepositoryImpl(
             context = context,
             lrcLibApiService = lrcLibApiService,
-            //musicDao = musicDao,
             lyricsDao = lyricsDao
         )
     }
@@ -194,13 +195,15 @@ object AppModule {
         @ApplicationContext context: Context,
         mediaStoreObserver: com.theveloper.pixelplay.data.observer.MediaStoreObserver,
         favoritesDao: FavoritesDao,
-        userPreferencesRepository: UserPreferencesRepository
-    ): com.theveloper.pixelplay.data.repository.SongRepository {
-        return com.theveloper.pixelplay.data.repository.MediaStoreSongRepository(
+        userPreferencesRepository: UserPreferencesRepository,
+        musicDao: MusicDao
+    ): SongRepository {
+        return MediaStoreSongRepository(
             context = context,
             mediaStoreObserver = mediaStoreObserver,
             favoritesDao = favoritesDao,
-            userPreferencesRepository = userPreferencesRepository
+            userPreferencesRepository = userPreferencesRepository,
+            musicDao = musicDao
         )
     }
 
@@ -208,6 +211,12 @@ object AppModule {
     @Provides
     fun provideTelegramDao(database: PixelPlayDatabase): com.theveloper.pixelplay.data.database.TelegramDao {
         return database.telegramDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideFolderTreeBuilder(): FolderTreeBuilder {
+        return FolderTreeBuilder()
     }
 
     @Provides
@@ -221,9 +230,10 @@ object AppModule {
         telegramDao: com.theveloper.pixelplay.data.database.TelegramDao,
         telegramCacheManager: com.theveloper.pixelplay.data.telegram.TelegramCacheManager,
         telegramRepository: com.theveloper.pixelplay.data.telegram.TelegramRepository,
-        songRepository: com.theveloper.pixelplay.data.repository.SongRepository,
+        songRepository: SongRepository,
         favoritesDao: FavoritesDao,
-        artistImageRepository: ArtistImageRepository
+        artistImageRepository: ArtistImageRepository,
+        folderTreeBuilder: FolderTreeBuilder
     ): MusicRepository {
         return MusicRepositoryImpl(
             context = context,
@@ -236,7 +246,8 @@ object AppModule {
             telegramRepository = telegramRepository,
             songRepository = songRepository,
             favoritesDao = favoritesDao,
-            artistImageRepository = artistImageRepository
+            artistImageRepository = artistImageRepository,
+            folderTreeBuilder = folderTreeBuilder
         )
 
     }

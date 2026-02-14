@@ -125,6 +125,7 @@ constructor(
         val PERSISTENT_SHUFFLE_ENABLED = booleanPreferencesKey("persistent_shuffle_enabled")
         val DISABLE_CAST_AUTOPLAY = booleanPreferencesKey("disable_cast_autoplay")
         val SHOW_QUEUE_HISTORY = booleanPreferencesKey("show_queue_history")
+        val FULL_PLAYER_SHOW_FILE_INFO = booleanPreferencesKey("full_player_show_file_info")
         val FULL_PLAYER_DELAY_ALL = booleanPreferencesKey("full_player_delay_all")
         val FULL_PLAYER_DELAY_ALBUM = booleanPreferencesKey("full_player_delay_album")
         val FULL_PLAYER_DELAY_METADATA = booleanPreferencesKey("full_player_delay_metadata")
@@ -132,7 +133,10 @@ constructor(
         val FULL_PLAYER_DELAY_CONTROLS = booleanPreferencesKey("full_player_delay_controls")
         val FULL_PLAYER_PLACEHOLDERS = booleanPreferencesKey("full_player_placeholders")
         val FULL_PLAYER_PLACEHOLDER_TRANSPARENT = booleanPreferencesKey("full_player_placeholder_transparent")
+        val FULL_PLAYER_PLACEHOLDERS_ON_CLOSE = booleanPreferencesKey("full_player_placeholders_on_close")
         val FULL_PLAYER_DELAY_THRESHOLD = intPreferencesKey("full_player_delay_threshold_percent")
+        val FULL_PLAYER_CLOSE_THRESHOLD = intPreferencesKey("full_player_close_threshold_percent")
+        val USE_PLAYER_SHEET_V2 = booleanPreferencesKey("use_player_sheet_v2")
 
         // Multi-Artist Settings
         val ARTIST_DELIMITERS = stringPreferencesKey("artist_delimiters")
@@ -167,6 +171,9 @@ constructor(
         
         // Library Sync
         val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
+        val DIRECTORY_RULES_VERSION = intPreferencesKey("directory_rules_version")
+        val LAST_APPLIED_DIRECTORY_RULES_VERSION =
+            intPreferencesKey("last_applied_directory_rules_version")
         
         // Lyrics Sync Offset per song (Map<songId, offsetMs> as JSON)
         val LYRICS_SYNC_OFFSETS = stringPreferencesKey("lyrics_sync_offsets_json")
@@ -452,13 +459,37 @@ constructor(
                 preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP] ?: 0L
             }
 
+    val directoryRulesVersionFlow: Flow<Int> =
+            dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.DIRECTORY_RULES_VERSION] ?: 0
+            }
+
+    val lastAppliedDirectoryRulesVersionFlow: Flow<Int> =
+            dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.LAST_APPLIED_DIRECTORY_RULES_VERSION] ?: 0
+            }
+
     suspend fun getLastSyncTimestamp(): Long {
         return lastSyncTimestampFlow.first()
+    }
+
+    suspend fun getDirectoryRulesVersion(): Int {
+        return directoryRulesVersionFlow.first()
+    }
+
+    suspend fun getLastAppliedDirectoryRulesVersion(): Int {
+        return lastAppliedDirectoryRulesVersionFlow.first()
     }
 
     suspend fun setLastSyncTimestamp(timestamp: Long) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP] = timestamp
+        }
+    }
+
+    suspend fun markDirectoryRulesVersionApplied(version: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.LAST_APPLIED_DIRECTORY_RULES_VERSION] = version
         }
     }
 
@@ -713,6 +744,17 @@ constructor(
         }
     }
 
+    val showPlayerFileInfoFlow: Flow<Boolean> =
+            dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.FULL_PLAYER_SHOW_FILE_INFO] ?: true
+            }
+
+    suspend fun setShowPlayerFileInfo(show: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.FULL_PLAYER_SHOW_FILE_INFO] = show
+        }
+    }
+
     val fullPlayerLoadingTweaksFlow: Flow<FullPlayerLoadingTweaks> = dataStore.data
         .map { preferences ->
             val delayAlbum = preferences[PreferencesKeys.FULL_PLAYER_DELAY_ALBUM] ?: true
@@ -728,10 +770,17 @@ constructor(
                 delaySongMetadata = delayMetadata,
                 delayProgressBar = delayProgress,
                 delayControls = delayControls,
-                showPlaceholders = preferences[PreferencesKeys.FULL_PLAYER_PLACEHOLDERS] ?: false,
+                showPlaceholders = preferences[PreferencesKeys.FULL_PLAYER_PLACEHOLDERS] ?: true,
                 transparentPlaceholders = preferences[PreferencesKeys.FULL_PLAYER_PLACEHOLDER_TRANSPARENT] ?: false,
-                contentAppearThresholdPercent = preferences[PreferencesKeys.FULL_PLAYER_DELAY_THRESHOLD] ?: 100
+                applyPlaceholdersOnClose = preferences[PreferencesKeys.FULL_PLAYER_PLACEHOLDERS_ON_CLOSE] ?: false,
+                contentAppearThresholdPercent = preferences[PreferencesKeys.FULL_PLAYER_DELAY_THRESHOLD] ?: 98,
+                contentCloseThresholdPercent = preferences[PreferencesKeys.FULL_PLAYER_CLOSE_THRESHOLD] ?: 0
             )
+        }
+
+    val usePlayerSheetV2Flow: Flow<Boolean> = dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.USE_PLAYER_SHEET_V2] ?: false
         }
 
     val favoriteSongIdsFlow: Flow<Set<String>> =
@@ -974,6 +1023,11 @@ constructor(
     suspend fun updateAllowedDirectories(allowedPaths: Set<String>) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.ALLOWED_DIRECTORIES] = allowedPaths
+            // Directory rules changed: force next sync to fetch full library again.
+            preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP] = 0L
+            val currentVersion = preferences[PreferencesKeys.DIRECTORY_RULES_VERSION] ?: 0
+            preferences[PreferencesKeys.DIRECTORY_RULES_VERSION] =
+                if (currentVersion == Int.MAX_VALUE) 0 else currentVersion + 1
         }
     }
 
@@ -981,6 +1035,11 @@ constructor(
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.ALLOWED_DIRECTORIES] = allowedPaths
             preferences[PreferencesKeys.BLOCKED_DIRECTORIES] = blockedPaths
+            // Directory rules changed: force next sync to fetch full library again.
+            preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP] = 0L
+            val currentVersion = preferences[PreferencesKeys.DIRECTORY_RULES_VERSION] ?: 0
+            preferences[PreferencesKeys.DIRECTORY_RULES_VERSION] =
+                if (currentVersion == Int.MAX_VALUE) 0 else currentVersion + 1
         }
     }
 
@@ -1013,6 +1072,17 @@ constructor(
                 if (removing)
                         preferences[PreferencesKeys.FAVORITE_SONG_IDS] = currentFavorites - songId
                 else preferences[PreferencesKeys.FAVORITE_SONG_IDS] = currentFavorites + songId
+            }
+        }
+    }
+
+    suspend fun setFavoriteSong(songId: String, isFavorite: Boolean) {
+        dataStore.edit { preferences ->
+            val currentFavorites = preferences[PreferencesKeys.FAVORITE_SONG_IDS] ?: emptySet()
+            preferences[PreferencesKeys.FAVORITE_SONG_IDS] = if (isFavorite) {
+                currentFavorites + songId
+            } else {
+                currentFavorites - songId
             }
         }
     }
@@ -1363,10 +1433,29 @@ constructor(
         }
     }
 
+    suspend fun setFullPlayerPlaceholdersOnClose(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.FULL_PLAYER_PLACEHOLDERS_ON_CLOSE] = enabled
+        }
+    }
+
     suspend fun setFullPlayerAppearThreshold(thresholdPercent: Int) {
-        val coercedValue = thresholdPercent.coerceIn(50, 100)
+        val coercedValue = thresholdPercent.coerceIn(0, 100)
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.FULL_PLAYER_DELAY_THRESHOLD] = coercedValue
+        }
+    }
+
+    suspend fun setFullPlayerCloseThreshold(thresholdPercent: Int) {
+        val coercedValue = thresholdPercent.coerceIn(0, 100)
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.FULL_PLAYER_CLOSE_THRESHOLD] = coercedValue
+        }
+    }
+
+    suspend fun setUsePlayerSheetV2(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.USE_PLAYER_SHEET_V2] = enabled
         }
     }
 
@@ -1572,6 +1661,44 @@ constructor(
         }
     }
     
+    suspend fun renameCustomPreset(oldName: String, newName: String) {
+        val current = customPresetsFlow.first().toMutableList()
+        val index = current.indexOfFirst { it.name == oldName }
+        if (index == -1) return
+        
+        current[index] = current[index].copy(name = newName, displayName = newName)
+        
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CUSTOM_PRESETS] = json.encodeToString(current)
+        }
+        
+        val pinned = pinnedPresetsFlow.first().toMutableList()
+        val pinnedIndex = pinned.indexOf(oldName)
+        if (pinnedIndex != -1) {
+            pinned[pinnedIndex] = newName
+            setPinnedPresets(pinned)
+        }
+        
+        val activePreset = dataStore.data.first()[PreferencesKeys.EQUALIZER_PRESET]
+        if (activePreset == oldName) {
+            dataStore.edit { preferences ->
+                preferences[PreferencesKeys.EQUALIZER_PRESET] = newName
+            }
+        }
+    }
+    
+    suspend fun updateCustomPresetBands(presetName: String, bandLevels: List<Int>) {
+        val current = customPresetsFlow.first().toMutableList()
+        val index = current.indexOfFirst { it.name == presetName }
+        if (index == -1) return
+        
+        current[index] = current[index].copy(bandLevels = bandLevels)
+        
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CUSTOM_PRESETS] = json.encodeToString(current)
+        }
+    }
+    
     // ===== Pinned Presets Persistence =====
     
     val pinnedPresetsFlow: Flow<List<String>> =
@@ -1732,11 +1859,17 @@ constructor(
                         preferences[stringPreferencesKey(entry.key)] = value
                     }
                     "int" -> {
-                        val value = entry.intValue ?: return@forEach
+                        val value = entry.intValue
+                            ?: entry.doubleValue?.toInt()
+                            ?: entry.longValue?.toInt()
+                            ?: return@forEach
                         preferences[intPreferencesKey(entry.key)] = value
                     }
                     "long" -> {
-                        val value = entry.longValue ?: return@forEach
+                        val value = entry.longValue
+                            ?: entry.doubleValue?.toLong()
+                            ?: entry.intValue?.toLong()
+                            ?: return@forEach
                         preferences[longPreferencesKey(entry.key)] = value
                     }
                     "boolean" -> {
@@ -1744,11 +1877,15 @@ constructor(
                         preferences[booleanPreferencesKey(entry.key)] = value
                     }
                     "float" -> {
-                        val value = entry.floatValue ?: return@forEach
+                        val value = entry.floatValue
+                            ?: entry.doubleValue?.toFloat()
+                            ?: return@forEach
                         preferences[androidx.datastore.preferences.core.floatPreferencesKey(entry.key)] = value
                     }
                     "double" -> {
-                        val value = entry.doubleValue ?: return@forEach
+                        val value = entry.doubleValue
+                            ?: entry.floatValue?.toDouble()
+                            ?: return@forEach
                         preferences[androidx.datastore.preferences.core.doublePreferencesKey(entry.key)] = value
                     }
                     "string_set" -> {

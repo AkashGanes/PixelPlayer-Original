@@ -51,6 +51,12 @@
 -keep class androidx.media3.decoder.ffmpeg.** { *; }
 -keep class androidx.media3.exoplayer.ffmpeg.** { *; }
 
+# Mantener clases de datos y sus miembros para evitar que R8 Full elimine campos
+-keepclassmembers class com.theveloper.pixelplay.data.model.** { *; }
+-keepclassmembers class com.theveloper.pixelplay.domain.model.** { *; }
+
+-keepattributes Signature, InnerClasses, EnclosingMethod, AnnotationDefault, *Annotation*
+
 # Please add these rules to your existing keep rules in order to suppress warnings.
 # This is generated automatically by the Android Gradle plugin.
 

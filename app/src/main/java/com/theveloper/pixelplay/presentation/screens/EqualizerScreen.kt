@@ -142,6 +142,7 @@ import androidx.compose.material3.Surface
 import com.theveloper.pixelplay.presentation.components.CustomPresetsSheet
 import com.theveloper.pixelplay.presentation.components.ReorderPresetsSheet
 import com.theveloper.pixelplay.presentation.components.SavePresetDialog
+import com.theveloper.pixelplay.presentation.components.RenamePresetDialog
 import com.theveloper.pixelplay.data.preferences.UserPreferencesRepository.EqualizerViewMode
 import androidx.compose.material.icons.rounded.ViewQuilt
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -167,6 +168,7 @@ fun EqualizerScreen(
     var showCustomPresetsSheet by remember { mutableStateOf(false) }
     var showReorderSheet by remember { mutableStateOf(false) }
     var showSaveDialog by remember { mutableStateOf(false) }
+    var renameTarget by remember { mutableStateOf<EqualizerPreset?>(null) }
     
     // Handlers
     if (showSaveDialog) {
@@ -176,12 +178,23 @@ fun EqualizerScreen(
         )
     }
     
+    renameTarget?.let { preset ->
+        RenamePresetDialog(
+            currentName = preset.displayName,
+            onDismiss = { renameTarget = null },
+            onRename = { newName ->
+                equalizerViewModel.renameCustomPreset(preset.name, newName)
+            }
+        )
+    }
+    
     if (showCustomPresetsSheet) {
         CustomPresetsSheet(
             presets = uiState.customPresets,
             pinnedPresetsNames = uiState.pinnedPresetsNames,
             onPresetSelected = { equalizerViewModel.selectPreset(it) },
             onPinToggled = { equalizerViewModel.togglePinPreset(it.name) },
+            onRename = { renameTarget = it },
             onDelete = { equalizerViewModel.deleteCustomPreset(it) },
             onDismiss = { showCustomPresetsSheet = false }
         )
@@ -316,13 +329,17 @@ fun EqualizerScreen(
                     bandLevels = uiState.bandLevels,
                     isEnabled = uiState.isEnabled,
                     currentPreset = uiState.currentPreset,
+                    editingPresetName = uiState.editingPresetName,
                     onBandLevelChanged = { bandId, level ->
                         equalizerViewModel.setBandLevel(bandId, level)
                     },
                     viewMode = uiState.viewMode,
                     onSaveClick = { showSaveDialog = true },
+                    onUpdateClick = {
+                        uiState.editingPresetName?.let { equalizerViewModel.updateCustomPresetBands(it) }
+                    },
                     onPresetsListClick = { showCustomPresetsSheet = true },
-                    onUnpinClick = { /* No-op or implement unpin from header */ }
+                    onUnpinClick = { }
                 )
             }
             
@@ -564,11 +581,13 @@ private fun BandSlidersSection(
     bandLevels: List<Int>,
     isEnabled: Boolean,
     currentPreset: EqualizerPreset,
+    editingPresetName: String?,
     onBandLevelChanged: (Int, Int) -> Unit,
     viewMode: EqualizerViewMode,
-    onSaveClick: () -> Unit, // Added
-    onUnpinClick: () -> Unit, // Optional, but focus on Save first
-    onPresetsListClick: () -> Unit // To open Custom Presets sheet
+    onSaveClick: () -> Unit,
+    onUpdateClick: () -> Unit,
+    onUnpinClick: () -> Unit,
+    onPresetsListClick: () -> Unit
 ) {
     val frequencies = EqualizerPreset.BAND_FREQUENCIES
     
@@ -589,7 +608,8 @@ private fun BandSlidersSection(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                 val isCustomOrSaved = currentPreset.name == "custom" || currentPreset.isCustom
+                 val isCustomOrSaved = editingPresetName != null || currentPreset.name == "custom" || currentPreset.isCustom
+                 val displayLabel = editingPresetName ?: currentPreset.displayName
                  
                  Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer,
@@ -602,7 +622,7 @@ private fun BandSlidersSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = currentPreset.displayName,
+                            text = displayLabel,
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                             fontWeight = FontWeight.Bold
@@ -619,8 +639,7 @@ private fun BandSlidersSection(
                     }
                 }
                 
-                // Save Button (Side-by-side)
-                if (currentPreset.name == "custom") {
+                if (currentPreset.name == "custom" && editingPresetName == null) {
                      Surface(
                         color = MaterialTheme.colorScheme.tertiaryContainer,
                         shape = CircleShape,
@@ -644,6 +663,32 @@ private fun BandSlidersSection(
                              )
                          }
                      }
+                }
+                
+                if (editingPresetName != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = CircleShape,
+                        onClick = onUpdateClick
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Save,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Update",
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
             

@@ -13,10 +13,10 @@ import com.theveloper.pixelplay.data.model.Song
 import com.theveloper.pixelplay.data.service.player.CastPlayer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,8 +31,17 @@ import javax.inject.Singleton
 class CastStateHolder @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    private val CAST_STATE_TAG = "CastStateHolder"
+
     // Cast session manager
-    val sessionManager: SessionManager = CastContext.getSharedInstance(context).sessionManager
+    val sessionManager: SessionManager? by lazy {
+        try {
+            CastContext.getSharedInstance(context).sessionManager
+        } catch (e: Exception) {
+            Timber.tag(CAST_STATE_TAG).e(e, "Failed to get CastContext sharedInstance")
+            null
+        }
+    }
     
     // Current cast session
     private val _castSession = MutableStateFlow<CastSession?>(null)
@@ -111,6 +120,8 @@ class CastStateHolder @Inject constructor(
     }
     
     fun setCastPlayer(player: CastPlayer?) {
+        if (_castPlayer === player) return
+        _castPlayer?.release()
         _castPlayer = player
     }
     
@@ -157,6 +168,7 @@ class CastStateHolder @Inject constructor(
     
     fun clearRemoteState() {
         _castSession.value = null
+        _castPlayer?.release()
         _castPlayer = null
         _isRemotePlaybackActive.value = false
         _isCastConnecting.value = false
@@ -216,8 +228,11 @@ class CastStateHolder @Inject constructor(
     // But refreshRoutes was launched in ViewModel.
     // We will make refreshRoutes suspend.
 
+    private var refreshRoutesJob: kotlinx.coroutines.Job? = null
+
     fun refreshRoutes(scope: kotlinx.coroutines.CoroutineScope) {
-        scope.launch {
+        refreshRoutesJob?.cancel()
+        refreshRoutesJob = scope.launch {
             _isRefreshingRoutes.value = true
             mediaRouter.removeCallback(mediaRouterCallback)
             val mediaRouteSelector = buildCastRouteSelector()
@@ -228,9 +243,9 @@ class CastStateHolder @Inject constructor(
             )
             updateRoutes()
             syncSelectedRouteFromRouter(mediaRouter)
-            
-            kotlinx.coroutines.delay(1800) 
-            
+
+            kotlinx.coroutines.delay(1800)
+
             mediaRouter.removeCallback(mediaRouterCallback)
             mediaRouter.addCallback(mediaRouteSelector, mediaRouterCallback, MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY)
             updateRoutes()
@@ -272,6 +287,7 @@ class CastStateHolder @Inject constructor(
     }
     
     fun onCleared() {
+        refreshRoutesJob?.cancel()
         mediaRouter.removeCallback(mediaRouterCallback)
     }
 

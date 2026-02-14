@@ -67,7 +67,6 @@ import androidx.compose.ui.text.style.TextGeometricTransform
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import coil.size.Size
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -80,7 +79,7 @@ fun ArtistDetailScreen(
     playlistViewModel: PlaylistViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val stablePlayerState by playerViewModel.stablePlayerState.collectAsState()
+    val stablePlayerState by playerViewModel.stablePlayerStateInfrequent.collectAsState()
     val playerSheetState by playerViewModel.sheetState.collectAsState()
     val lazyListState = rememberLazyListState()
     val favoriteIds by playerViewModel.favoriteSongIds.collectAsState()
@@ -105,10 +104,10 @@ fun ArtistDetailScreen(
     val maxTopBarHeightPx = with(density) { maxTopBarHeight.toPx() }
 
     val topBarHeight = remember { Animatable(maxTopBarHeightPx) }
-    var collapseFraction by remember { mutableFloatStateOf(0f) }
-
-    LaunchedEffect(topBarHeight.value) {
-        collapseFraction = 1f - ((topBarHeight.value - minTopBarHeightPx) / (maxTopBarHeightPx - minTopBarHeightPx)).coerceIn(0f, 1f)
+    val collapseFraction by remember {
+        derivedStateOf {
+            1f - ((topBarHeight.value - minTopBarHeightPx) / (maxTopBarHeightPx - minTopBarHeightPx)).coerceIn(0f, 1f)
+        }
     }
 
     val nestedScrollConnection = remember {
@@ -277,8 +276,8 @@ fun ArtistDetailScreen(
     if (showSongInfoBottomSheet && selectedSongForInfo != null) {
         val currentSong = selectedSongForInfo
         val isFavorite = remember(currentSong?.id, favoriteIds) {
-            derivedStateOf { currentSong?.let { favoriteIds.contains(it.id) } }
-        }.value ?: false
+            currentSong?.let { favoriteIds.contains(it.id) } ?: false
+        }
 
         if (currentSong != null) {
             val removeFromListTrigger = remember(uiState.songs) {
@@ -441,7 +440,7 @@ private fun CustomCollapsingTopBar(
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(artist.imageUrl)
-                        .size(Size.ORIGINAL)
+                        .size(600, 600)
                         .crossfade(true)
                         .build(),
                     contentDescription = artist.name,

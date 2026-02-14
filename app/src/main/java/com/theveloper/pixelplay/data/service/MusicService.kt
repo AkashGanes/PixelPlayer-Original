@@ -53,6 +53,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
+import com.theveloper.pixelplay.data.equalizer.EqualizerManager
+
 import javax.inject.Inject
 
 // Acciones personalizadas para compatibilidad con el widget existente
@@ -70,6 +72,8 @@ class MusicService : MediaSessionService() {
     lateinit var musicRepository: MusicRepository
     @Inject
     lateinit var userPreferencesRepository: UserPreferencesRepository
+    @Inject
+    lateinit var equalizerManager: EqualizerManager
 
     private var favoriteSongIds = emptySet<String>()
     private var mediaSession: MediaSession? = null
@@ -114,6 +118,40 @@ class MusicService : MediaSessionService() {
         }
 
         controller.initialize()
+
+        // Restore equalizer state from preferences and attach to audio session.
+        // This ensures the equalizer is active even before the user opens the EQ screen.
+        serviceScope.launch {
+            val eqEnabled = userPreferencesRepository.equalizerEnabledFlow.first()
+            val presetName = userPreferencesRepository.equalizerPresetFlow.first()
+            val customBands = userPreferencesRepository.equalizerCustomBandsFlow.first()
+            val bassBoostEnabled = userPreferencesRepository.bassBoostEnabledFlow.first()
+            val bassBoostStrength = userPreferencesRepository.bassBoostStrengthFlow.first()
+            val virtualizerEnabled = userPreferencesRepository.virtualizerEnabledFlow.first()
+            val virtualizerStrength = userPreferencesRepository.virtualizerStrengthFlow.first()
+            val loudnessEnabled = userPreferencesRepository.loudnessEnhancerEnabledFlow.first()
+            val loudnessStrength = userPreferencesRepository.loudnessEnhancerStrengthFlow.first()
+
+            equalizerManager.restoreState(
+                eqEnabled, presetName, customBands,
+                bassBoostEnabled, bassBoostStrength,
+                virtualizerEnabled, virtualizerStrength,
+                loudnessEnabled, loudnessStrength
+            )
+
+            val sessionId = engine.getAudioSessionId()
+            if (sessionId != 0) {
+                equalizerManager.attachToAudioSession(sessionId)
+            }
+
+            // Re-attach equalizer whenever the active audio session changes (e.g. crossfade)
+            engine.activeAudioSessionId.collect { newSessionId ->
+                if (newSessionId != 0) {
+                    equalizerManager.attachToAudioSession(newSessionId)
+                }
+            }
+        }
+
         serviceScope.launch {
             userPreferencesRepository.keepPlayingInBackgroundFlow.collect { enabled ->
                 keepPlayingInBackground = enabled
@@ -208,6 +246,7 @@ class MusicService : MediaSessionService() {
                             SessionError.ERROR_UNKNOWN))
                         Timber.tag("MusicService").d("Executing LIKE for songId: $songId")
                         val isCurrentlyFavorite = favoriteSongIds.contains(songId)
+                        val targetFavoriteState = !isCurrentlyFavorite
                         favoriteSongIds = if (isCurrentlyFavorite) {
                             favoriteSongIds - songId
                         } else {
@@ -218,7 +257,8 @@ class MusicService : MediaSessionService() {
 
                         serviceScope.launch {
                             Timber.tag("MusicService").d("Toggling favorite status for $songId")
-                            userPreferencesRepository.toggleFavoriteSong(songId)
+                            musicRepository.setFavoriteStatus(songId, targetFavoriteState)
+                            userPreferencesRepository.setFavoriteSong(songId, targetFavoriteState)
                             Timber.tag("MusicService")
                                 .d("Toggled favorite status. Updating notification.")
                             refreshMediaSessionUi(session)

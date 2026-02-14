@@ -246,7 +246,7 @@ fun ChangelogBottomSheet(
                 verticalArrangement = Arrangement.spacedBy(24.dp),
                 contentPadding = PaddingValues(bottom = 120.dp)
             ) {
-                items(changelog) { version ->
+                items(changelog, key = { it.version }) { version ->
                     ChangelogVersionItem(version = version)
                 }
             }

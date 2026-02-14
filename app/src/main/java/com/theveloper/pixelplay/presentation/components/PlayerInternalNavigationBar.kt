@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +46,8 @@ private fun PlayerInternalNavigationItemsRow(
     onSearchIconDoubleTap: () -> Unit
 ) {
     val navBarInsetPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val latestCurrentRoute by rememberUpdatedState(currentRoute)
+    val latestOnSearchIconDoubleTap by rememberUpdatedState(onSearchIconDoubleTap)
 
     val rowModifier = if (navBarStyle == NavBarStyle.FULL_WIDTH) {
         modifier
@@ -92,43 +95,46 @@ private fun PlayerInternalNavigationItemsRow(
             val labelLambda: @Composable () -> Unit = remember(item.label) {
                 { Text(item.label) }
             }
-            val onClickLambda: () -> Unit = {
-                val isSearchTab = item.screen.route == Screen.Search.route
-                val isAlreadySelected = currentRoute == item.screen.route
+            val onClickLambda: () -> Unit = remember(item.screen.route, navController, scope) {
+                {
+                    val itemRoute = item.screen.route
+                    val isSearchTab = itemRoute == Screen.Search.route
+                    val isAlreadySelected = latestCurrentRoute == itemRoute
 
-                if (isSearchTab) {
-                    val now = SystemClock.elapsedRealtime()
-                    val isDoubleTap = now - lastSearchTapTimestamp <= 350L
-                    lastSearchTapTimestamp = now
+                    if (isSearchTab) {
+                        val now = SystemClock.elapsedRealtime()
+                        val isDoubleTap = now - lastSearchTapTimestamp <= 350L
+                        lastSearchTapTimestamp = now
 
-                    if (!isAlreadySelected) {
-                        navController.navigate(item.screen.route) {
+                        if (!isAlreadySelected) {
+                            navController.navigate(itemRoute) {
+                                popUpTo(navController.graph.id) { inclusive = true; saveState = false }
+                                launchSingleTop = true
+                                restoreState = false
+                            }
+                        }
+
+                        if (isDoubleTap) {
+                            lastSearchTapTimestamp = 0L
+                            if (isAlreadySelected) {
+                                latestOnSearchIconDoubleTap()
+                            } else {
+                                scope.launch {
+                                    delay(160L)
+                                    latestOnSearchIconDoubleTap()
+                                }
+                            }
+                        }
+                    } else if (!isAlreadySelected) {
+                        lastSearchTapTimestamp = 0L
+                        navController.navigate(itemRoute) {
                             popUpTo(navController.graph.id) { inclusive = true; saveState = false }
                             launchSingleTop = true
                             restoreState = false
                         }
-                    }
-
-                    if (isDoubleTap) {
+                    } else {
                         lastSearchTapTimestamp = 0L
-                        if (isAlreadySelected) {
-                            onSearchIconDoubleTap()
-                        } else {
-                            scope.launch {
-                                delay(160L)
-                                onSearchIconDoubleTap()
-                            }
-                        }
                     }
-                } else if (!isAlreadySelected) {
-                    lastSearchTapTimestamp = 0L
-                    navController.navigate(item.screen.route) {
-                        popUpTo(navController.graph.id) { inclusive = true; saveState = false }
-                        launchSingleTop = true
-                        restoreState = false
-                    }
-                } else {
-                    lastSearchTapTimestamp = 0L
                 }
             }
             CustomNavigationBarItem(

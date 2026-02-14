@@ -83,6 +83,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -130,9 +131,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Velocity
-import androidx.compose.runtime.snapshotFlow
 import com.theveloper.pixelplay.utils.shapes.RoundedStarShape
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -155,7 +158,7 @@ fun CastBottomSheet(
     val isRemotePlaybackActive by playerViewModel.isRemotePlaybackActive.collectAsState()
     val isCastConnecting by playerViewModel.isCastConnecting.collectAsState()
     val trackVolume by playerViewModel.trackVolume.collectAsState()
-    val isPlaying = playerViewModel.stablePlayerState.collectAsState().value.isPlaying
+    val isPlaying = playerViewModel.stablePlayerStateInfrequent.collectAsState().value.isPlaying
     val context = LocalContext.current
 
     val requiredPermissions = remember {
@@ -315,7 +318,10 @@ fun CastBottomSheet(
                 onSelectDevice = { id ->
                     routes.firstOrNull { it.id == id }?.let { playerViewModel.selectRoute(it) }
                 },
-                onDisconnect = { playerViewModel.disconnect() },
+                onDisconnect = {
+                    playerViewModel.disconnect()
+                    onDismiss()
+                },
                 onVolumeChange = { value ->
                     if (uiState.activeDevice.isRemote) {
                         playerViewModel.setRouteVolume(value.toInt())
@@ -663,6 +669,30 @@ private fun CastSheetContainer(
     val contentAlpha = remember { Animatable(0f) }
     var isVisible by remember { mutableStateOf(false) }
     var isDismissing by remember { mutableStateOf(false) }
+    var pendingOpenAnimation by remember { mutableStateOf(false) }
+    var dragOffsetCache by remember { mutableStateOf<Float?>(null) }
+    var pendingDragTarget by remember { mutableStateOf<Float?>(null) }
+    var dragSnapJob by remember { mutableStateOf<Job?>(null) }
+
+    fun resetDragPipeline() {
+        dragOffsetCache = null
+        pendingDragTarget = null
+        dragSnapJob?.cancel()
+        dragSnapJob = null
+    }
+
+    fun launchDragSnapLoopIfNeeded() {
+        if (dragSnapJob?.isActive == true) return
+        dragSnapJob = scope.launch {
+            while (isActive) {
+                val target = pendingDragTarget ?: break
+                pendingDragTarget = null
+                sheetOffset.snapTo(target)
+                withFrameNanos { }
+            }
+            dragSnapJob = null
+        }
+    }
 
     val scrimAlpha by animateFloatAsState(
         targetValue = if (isVisible) 0.45f else 0f,
@@ -680,20 +710,42 @@ private fun CastSheetContainer(
             // so we can see it slide in.
             contentAlpha.snapTo(1f)
             isVisible = true
+            onExpansionChanged(1f)
+            pendingOpenAnimation = true
         }
 
-        if (!isDismissing) {
-            sheetOffset.animateTo(0f, tween(durationMillis = 320, easing = FastOutSlowInEasing))
+        if (!isDismissing && sheetOffset.value > 0.5f) {
+            resetDragPipeline()
+            if (pendingOpenAnimation) {
+                withFrameNanos { }
+                pendingOpenAnimation = false
+            }
+            val hidden = hiddenOffsetPx.floatValue
+            val travelFraction = if (hidden > 0f) {
+                (abs(sheetOffset.value) / hidden).coerceIn(0f, 1f)
+            } else {
+                1f
+            }
+            val durationMillis = (220f + (130f * travelFraction)).toInt()
+            sheetOffset.animateTo(0f, tween(durationMillis = durationMillis, easing = FastOutSlowInEasing))
         }
     }
 
     suspend fun animateToRest() {
-        sheetOffset.animateTo(0f, tween(durationMillis = 200, easing = FastOutSlowInEasing))
+        val hidden = hiddenOffsetPx.floatValue
+        val travelFraction = if (hidden > 0f) {
+            (abs(sheetOffset.value) / hidden).coerceIn(0f, 1f)
+        } else {
+            1f
+        }
+        val durationMillis = (170f + (120f * travelFraction)).toInt()
+        sheetOffset.animateTo(0f, tween(durationMillis = durationMillis, easing = FastOutSlowInEasing))
     }
 
     fun dismissSheet(velocity: Float = 0f) {
         if (isDismissing) return
         isDismissing = true
+        resetDragPipeline()
         val targetOffset = when {
             hiddenOffsetPx.floatValue > 0f -> hiddenOffsetPx.floatValue
             sheetHeightPx > 0f -> sheetHeightPx
@@ -701,6 +753,7 @@ private fun CastSheetContainer(
         }
         scope.launch {
             isVisible = false
+            onExpansionChanged(0f)
             try {
                 sheetOffset.animateTo(
                     targetValue = targetOffset,
@@ -718,16 +771,18 @@ private fun CastSheetContainer(
     // Shared logic for manual dragging (from header or nested scroll)
     fun onDrag(dragAmount: Float) {
         if (isDismissing) return
-        val current = sheetOffset.value
+        val current = dragOffsetCache ?: sheetOffset.value
         val target = (current + dragAmount).coerceIn(0f, hiddenOffsetPx.floatValue)
-        scope.launch {
-            sheetOffset.snapTo(target)
-        }
+        dragOffsetCache = target
+        pendingDragTarget = target
+        launchDragSnapLoopIfNeeded()
     }
 
     fun onDragEnd(velocity: Float) {
         if (isDismissing) return
-        if (sheetOffset.value > dragThreshold || velocity > 1400f) {
+        val settledOffset = pendingDragTarget ?: dragOffsetCache ?: sheetOffset.value
+        resetDragPipeline()
+        if (settledOffset > dragThreshold || velocity > 1400f) {
             dismissSheet(velocity)
         } else {
             scope.launch { animateToRest() }
@@ -749,6 +804,7 @@ private fun CastSheetContainer(
                 onDragEnd(velocity)
             },
             onDragCancel = {
+                resetDragPipeline()
                 scope.launch { animateToRest() }
             }
         )
@@ -816,9 +872,11 @@ private fun CastSheetContainer(
                     val height = it.size.height.toFloat()
                     if (height != sheetHeightPx) sheetHeightPx = height
                 }
-                .offset { IntOffset(0, sheetOffset.value.roundToInt()) }
-                // Initialize hidden by using alpha 0 until layout is ready and snapped to bottom
-                .graphicsLayer { alpha = contentAlpha.value }
+                // Transform-only motion keeps frame budget predictable during open/close animations.
+                .graphicsLayer {
+                    translationY = sheetOffset.value
+                    alpha = contentAlpha.value
+                }
                 .then(sheetDragModifier)
                 .nestedScroll(nestedScrollConnection),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -831,18 +889,7 @@ private fun CastSheetContainer(
         }
     }
 
-    LaunchedEffect(hiddenOffsetPx.floatValue) {
-        snapshotFlow { sheetOffset.value }
-            .collect { offset ->
-                val hidden = hiddenOffsetPx.floatValue
-                val fraction = if (hidden > 0f) {
-                    (1f - (offset / hidden)).coerceIn(0f, 1f)
-                } else {
-                    0f
-                }
-                onExpansionChanged(fraction)
-            }
-    }
+    // Cast overlay fraction is handled at state-level to avoid frame-by-frame parent recomposition.
 }
 
 @Composable
@@ -1105,6 +1152,7 @@ private fun ActiveDeviceHero(
                     if (device.isRemote) {
                         Button(
                             onClick = onDisconnect,
+                            enabled = !device.isConnecting,
                             shape = RoundedCornerShape(50),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -1284,7 +1332,16 @@ private fun CastDeviceRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(CircleShape) // Mantenemos el clip circular para el ripple
-            .clickable(enabled = !device.isBluetooth, onClick = if (device.isSelected) onDisconnect else onSelect),
+            .clickable(
+                enabled = !device.isBluetooth,
+                onClick = when {
+                    device.isSelected &&
+                        device.connectionState == MediaRouter.RouteInfo.CONNECTION_STATE_CONNECTED -> onDisconnect
+                    device.isSelected &&
+                        device.connectionState == MediaRouter.RouteInfo.CONNECTION_STATE_CONNECTING -> ({})
+                    else -> onSelect
+                }
+            ),
         color = containerColor,
         tonalElevation = 2.dp
     ) {

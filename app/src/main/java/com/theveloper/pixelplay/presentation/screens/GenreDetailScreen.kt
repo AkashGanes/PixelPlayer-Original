@@ -115,13 +115,13 @@ fun GenreDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val playerSheetState by playerViewModel.sheetState.collectAsState()
-    val stablePlayerState by playerViewModel.stablePlayerState.collectAsState()
+    val stablePlayerState by playerViewModel.stablePlayerStateInfrequent.collectAsState()
     val favoriteSongIds by playerViewModel.favoriteSongIds.collectAsState()
     val playlistUiState by playlistViewModel.uiState.collectAsState()
     val libraryGenres by playerViewModel.genres.collectAsState()
     
     // Get artists to resolve images
-    val artists by playerViewModel.playerUiState.map { it.artists }.collectAsState(initial = persistentListOf())
+    val artists by playerViewModel.artistsFlow.collectAsState(initial = persistentListOf())
 
     val darkMode = LocalPixelPlayDarkTheme.current
 

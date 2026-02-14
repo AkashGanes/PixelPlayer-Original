@@ -3,6 +3,7 @@ package com.theveloper.pixelplay.presentation.viewmodel
 import android.content.Context
 import app.cash.turbine.test
 import com.theveloper.pixelplay.data.database.AlbumArtThemeDao
+import com.google.common.util.concurrent.ListenableFuture
 import com.theveloper.pixelplay.data.model.SearchFilterType
 import com.theveloper.pixelplay.data.model.SearchHistoryItem
 import com.theveloper.pixelplay.data.model.SearchResultItem
@@ -164,12 +165,24 @@ class PlayerViewModelTest {
         every { mockCastTransferStateHolder.initialize(any(), any(), any(), any(), any(), any(), any(), any()) } just runs // Fixed: 8 args needed
         
         // Mock MusicRepository Basic Returns
-        every { mockMusicRepository.getPaginatedSongs() } returns flowOf(androidx.paging.PagingData.empty())
+        every { mockMusicRepository.getPaginatedSongs(any()) } returns flowOf(androidx.paging.PagingData.empty())
         every { mockMusicRepository.getAudioFiles() } returns flowOf(emptyList())
+        coEvery { mockMusicRepository.getFavoriteSongIdsOnce() } returns emptySet()
+        every { mockLyricsStateHolder.songUpdates } returns MutableSharedFlow()
 
         // Initialize PlayerViewModel
         val sessionToken = mockk<SessionToken>(relaxed = true)
         mockMediaControllerFactory = mockk(relaxed = true)
+        
+        // Mock ListenableFuture for MediaController creation
+        val mockController = mockk<MediaController>(relaxed = true)
+        val mockFuture = mockk<ListenableFuture<MediaController>>(relaxed = true)
+        every { mockFuture.get() } returns mockController
+        every { mockFuture.addListener(any(), any()) } answers {
+            val runnable = firstArg<Runnable>()
+            runnable.run()
+        }
+        every { mockMediaControllerFactory.create(any(), any(), any()) } returns mockFuture
         
         // Ensure manual executor for main thread to prevent RejectedExecutionException
         // We already mocked ContextCompat.getMainExecutor above.
@@ -229,8 +242,9 @@ class PlayerViewModelTest {
             testDispatcher.scheduler.advanceUntilIdle() // Ensure ViewModel collects the update
             
             // Still mock repository for getMusicByGenre calls
-            every { mockMusicRepository.getMusicByGenre(any()) } answers {
-                val genre = firstArg<String>()
+            val genreSlot = slot<String>()
+            every { mockMusicRepository.getMusicByGenre(capture(genreSlot)) } answers {
+                val genre = genreSlot.captured
                 val filtered = songs.filter { it.genre.equals(genre, ignoreCase = true) }
                 flowOf(filtered)
             }
@@ -297,7 +311,7 @@ class PlayerViewModelTest {
             setupViewModelWithSongs(testSongs)
 
             val uris = playerViewModel.getSongUrisForGenre("rOcK").first()
-            assertEquals(listOf("rock_cover1.png"), uris)
+            assertEquals(listOf("rock_cover1.png", "rock_cover2.png"), uris)
         }
 
         @Test
@@ -324,36 +338,36 @@ class PlayerViewModelTest {
 
         private val song1 = Song(id = "1", title = "Song 1", artist = "Artist A", genre = "Rock", albumArtUriString = "cover1.png", artistId = 1L, albumId = 1L, contentUriString = "content://dummy/1", duration = 180000L, bitrate = null, sampleRate = null, album = "Album", path = "path", mimeType = "audio/mpeg")
         private val song2 = Song(id = "2", title = "Song 2", artist = "Artist B", genre = "Pop", albumArtUriString = "cover2.png", artistId = 2L, albumId = 2L, contentUriString = "content://dummy/2", duration = 200000L, bitrate = null, sampleRate = null, album = "Album", path = "path", mimeType = "audio/mpeg")
-        private val allSongs = listOf(song1, song2)
-
+        private val song3 = Song(id = "3", title = "Song 3", artist = "Artist C", genre = "Jazz", albumArtUriString = "cover3.png", artistId = 3L, albumId = 3L, contentUriString = "content://dummy/3", duration = 210000L, bitrate = null, sampleRate = null, album = "Album", path = "path", mimeType = "audio/mpeg")
+        
         @Test
-        fun `shuffleAllSongs calls playSongs with a random song`() = runTest {
+        fun `shuffleAllSongs calls prepareShuffledQueue with random songs`() = runTest {
             // Arrange
-            val spiedViewModel = spyk(playerViewModel, recordPrivateCalls = true)
-            coEvery { spiedViewModel.playSongs(any(), any(), any(), any()) } just runs
-            spiedViewModel.updateAllSongs(allSongs)
+            val randomSongs = listOf(song2, song3, song1)
+            coEvery { mockMusicRepository.getRandomSongs(500) } returns randomSongs
+            
+            // Mock queue preparation to return a valid shuffled queue and start song
+            coEvery { mockQueueStateHolder.prepareShuffledQueueSuspending(randomSongs, any()) } returns Pair(randomSongs, song2)
+            
+            // We can't easily spy on internal methods like internalPlaySongs, 
+            // but we can verify dependencies called by it.
+            // internalPlaySongs calls dualPlayerEngine.masterPlayer.setMediaItems if no cast session
+            val mockPlayer = mockk<androidx.media3.common.Player>(relaxed = true)
+            every { mockDualPlayerEngine.masterPlayer } returns mockPlayer
+            // Ensure no cast session is active so it plays locally
+            every { mockCastStateHolder.castSession.value } returns null
 
             // Act
-            spiedViewModel.shuffleAllSongs()
+            playerViewModel.shuffleAllSongs()
             advanceUntilIdle()
 
             // Assert
-            val capturedSongs = slot<List<Song>>()
-            val capturedStartSong = slot<Song>()
-            val capturedQueueName = slot<String>()
-
-            coVerify {
-                spiedViewModel.playSongs(
-                    songsToPlay = capture(capturedSongs),
-                    startSong = capture(capturedStartSong),
-                    queueName = capture(capturedQueueName),
-                    playlistId = any()
-                )
-            }
-
-            assertEquals(allSongs, capturedSongs.captured)
-            assertTrue(allSongs.contains(capturedStartSong.captured))
-            assertEquals("All Songs (Shuffled)", capturedQueueName.captured)
+            coVerify { mockMusicRepository.getRandomSongs(500) }
+            coVerify { mockQueueStateHolder.prepareShuffledQueueSuspending(randomSongs, "All Songs (Shuffled)") }
+            // Verify playback started
+            verify { mockPlayer.setMediaItems(any(), any(), any()) }
+            verify { mockPlayer.prepare() }
+            verify { mockPlayer.play() }
         }
     }
 

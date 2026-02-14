@@ -104,6 +104,7 @@ fun QuickFillContent(
                 },
                 navigationIcon = {
                     FilledIconButton(
+                        modifier = Modifier.padding(start = 8.dp),
                         onClick = { if (step > 0) step-- else onDismiss() },
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
@@ -336,7 +337,7 @@ fun GenreValidatorContent(
             }
         }
         
-        items(allGenres) { genre ->
+        items(allGenres, key = { it }) { genre ->
             val isSelected = selectedGenre == genre
             val containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
             val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
@@ -410,7 +411,7 @@ fun GenreValidatorContent(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.height(200.dp) // Fixed height for scrollability inside dialog
                     ) {
-                        items(GenreIconProvider.SELECTABLE_ICONS) { iconRes ->
+                        items(GenreIconProvider.SELECTABLE_ICONS, key = { it }) { iconRes ->
                             val isSelected = selectedIcon == iconRes
                             Box(
                                 modifier = Modifier

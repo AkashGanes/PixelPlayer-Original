@@ -58,8 +58,14 @@ class MusicRepositoryImplTest {
             ArtistEntity(102L, "ArtistName2", 3, null)
         )
         every { mockMusicDao.getAllArtistsRaw() } returns flowOf(dummyArtists)
+        coEvery { mockMusicDao.getDistinctParentDirectories() } returns listOf("/music/folder1", "/music/folder2")
 
         every { mockMusicDao.getAllSongArtistCrossRefs() } returns flowOf(emptyList())
+        every { mockMusicDao.getAllSongs(any(), any()) } answers {
+            println("getAllSongs called with: ${args[0]}, ${args[1]}")
+            flowOf(emptyList())
+        }
+        every { mockMusicDao.getArtistsWithSongCountsFiltered(any(), any()) } returns flowOf(emptyList())
 
         // Logic-based DAO stubs
         every { mockMusicDao.getSongs(any(), eq(true)) } answers {
@@ -96,8 +102,10 @@ class MusicRepositoryImplTest {
             telegramCacheManager = mockTelegramCacheManager,
             telegramRepository = mockTelegramRepository,
             songRepository = mockSongRepository,
+
             favoritesDao = mockFavoritesDao,
-            artistImageRepository = mockArtistImageRepository
+            artistImageRepository = mockArtistImageRepository,
+            folderTreeBuilder = mockk(relaxed = true)
         )
     }
 
@@ -118,19 +126,20 @@ class MusicRepositoryImplTest {
 
         // Mock filter behavior:
         val filteredSongs = songEntities.filter { it.filePath.startsWith("/allowed/path") }
-        every { mockMusicDao.getSongs(any(), eq(true)) } returns flowOf(filteredSongs)
-        every { mockMusicDao.getSongs(any(), eq(false)) } returns flowOf(songEntities)
+        every { mockMusicDao.getAllSongs(any(), eq(true)) } returns flowOf(filteredSongs)
+        every { mockMusicDao.getAllSongs(any(), eq(false)) } returns flowOf(songEntities)
         
         every { mockUserPreferencesRepository.allowedDirectoriesFlow } returns flowOf(allowedDirs) // No es suspend
         every { mockUserPreferencesRepository.blockedDirectoriesFlow } returns flowOf(setOf("/dummy")) // Trigger filter
         every { mockUserPreferencesRepository.initialSetupDoneFlow } returns flowOf(true) // No es suspend
         every { mockUserPreferencesRepository.isFolderFilterActiveFlow } returns flowOf(true)
+        coEvery { mockMusicDao.getDistinctParentDirectories() } returns listOf("/allowed/path", "/forbidden/path")
 
         val result: List<Song> = musicRepository.getAudioFiles().first()
 
         assertEquals(2, result.size)
         assertEquals(listOf("1", "3"), result.map { it.id })
-        verify { mockMusicDao.getSongs(any<List<String>>(), any<Boolean>()) }
+        verify { mockMusicDao.getAllSongs(any<List<String>>(), any<Boolean>()) }
     }
 
     @Test
@@ -177,6 +186,14 @@ class MusicRepositoryImplTest {
         // Filtered logic: Only S1, S2, S4 are in allowed directories
         val filteredSongs = songEntities.filter { it.filePath.startsWith("/allowed") }
         every { mockMusicDao.getSongs(any(), eq(true)) } returns flowOf(filteredSongs)
+        val expectedAlbums = allAlbumEntities.map { album ->
+            when (album.id) {
+                201L -> album.copy(songCount = 2)
+                203L -> album.copy(songCount = 1)
+                else -> album
+            }
+        }.filter { it.id == 201L || it.id == 203L }
+        every { mockMusicDao.getAlbums(any(), eq(true)) } returns flowOf(expectedAlbums)
 
         every { mockUserPreferencesRepository.allowedDirectoriesFlow } returns flowOf(allowedDirs)
         every { mockUserPreferencesRepository.initialSetupDoneFlow } returns flowOf(true)
@@ -205,8 +222,13 @@ class MusicRepositoryImplTest {
 
         // Mock getSongs logic to return filtered list for getArtists internal call to getAudioFiles()
         // Filtered logic: Only S1 and S3 are in allowed directories
+        // Filtered logic: Only S1 and S3 are in allowed directories
         val filteredSongs = songEntities.filter { it.filePath.startsWith("/allowed") }
         every { mockMusicDao.getSongs(any(), eq(true)) } returns flowOf(filteredSongs)
+        val expectedArtists = allArtistEntities.map { 
+            if (it.id == 101L) it.copy(trackCount = 2) else it 
+        }.filter { it.id == 101L }
+        every { mockMusicDao.getArtistsWithSongCountsFiltered(any(), eq(true)) } returns flowOf(expectedArtists)
         
         every { mockUserPreferencesRepository.allowedDirectoriesFlow } returns flowOf(allowedDirs)
         every { mockUserPreferencesRepository.initialSetupDoneFlow } returns flowOf(true)

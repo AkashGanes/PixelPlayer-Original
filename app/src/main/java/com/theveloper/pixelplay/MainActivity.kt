@@ -105,6 +105,7 @@ import com.theveloper.pixelplay.presentation.components.NavBarContentHeight
 import com.theveloper.pixelplay.presentation.components.NavBarContentHeightFullWidth
 import com.theveloper.pixelplay.presentation.components.PlayerInternalNavigationBar
 import com.theveloper.pixelplay.presentation.components.UnifiedPlayerSheet
+import com.theveloper.pixelplay.presentation.components.UnifiedPlayerSheetV2
 import com.theveloper.pixelplay.presentation.navigation.AppNavigation
 import com.theveloper.pixelplay.presentation.navigation.Screen
 import com.theveloper.pixelplay.presentation.screens.SetupScreen
@@ -125,6 +126,8 @@ import com.theveloper.pixelplay.presentation.utils.LocalAppHapticsConfig
 import com.theveloper.pixelplay.presentation.utils.NoOpHapticFeedback
 import com.theveloper.pixelplay.utils.CrashLogData
 import javax.annotation.concurrent.Immutable
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 
 @Immutable
@@ -133,6 +136,11 @@ data class BottomNavItem(
     @DrawableRes val iconResId: Int,
     @DrawableRes val selectedIconResId: Int? = null,
     val screen: Screen
+)
+
+private data class DismissUndoBarSlice(
+    val isVisible: Boolean = false,
+    val durationMillis: Long = 4000L
 )
 
 @UnstableApi
@@ -219,7 +227,7 @@ class MainActivity : ComponentActivity() {
 
             // Check for crash log when app starts
             LaunchedEffect(Unit) {
-                if (CrashHandler.hasCrashLog()) {
+                if (!isBenchmarkMode && CrashHandler.hasCrashLog()) {
                     crashLogData = CrashHandler.getCrashLog()
                     showCrashReportDialog = true
                 }
@@ -501,6 +509,7 @@ class MainActivity : ComponentActivity() {
                 Screen.Settings.route,
                 Screen.PlaylistDetail.route,
                 Screen.DailyMixScreen.route,
+                Screen.RecentlyPlayed.route,
                 Screen.GenreDetail.route,
                 Screen.AlbumDetail.route,
                 Screen.ArtistDetail.route,
@@ -514,7 +523,8 @@ class MainActivity : ComponentActivity() {
                 Screen.Equalizer.route,
                 Screen.SettingsCategory.route,
                 Screen.DelimiterConfig.route,
-                Screen.PaletteStyle.route
+                Screen.PaletteStyle.route,
+                Screen.RecentlyPlayed.route
             )
         }
         val shouldHideNavigationBar by remember(currentRoute, isSearchBarActive) {
@@ -591,8 +601,12 @@ class MainActivity : ComponentActivity() {
                 bottomBar = {
                     if (!shouldHideNavigationBar) {
                         val playerContentExpansionFraction = playerViewModel.playerContentExpansionFraction.value
-                        val showPlayerContentArea = playerViewModel.stablePlayerState.collectAsState().value.currentSong != null
-                        val currentSheetContentState by playerViewModel.sheetState.collectAsState()
+                        val currentSongId by remember {
+                            playerViewModel.stablePlayerState
+                                .map { it.currentSong?.id }
+                                .distinctUntilChanged()
+                        }.collectAsState(initial = null)
+                        val showPlayerContentArea = currentSongId != null
                         val navBarCornerRadius by playerViewModel.navBarCornerRadius.collectAsState()
                         val navBarElevation = 3.dp
 
@@ -680,6 +694,9 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 NavBarContentHeightFullWidth + systemNavBarInset
                             }
+                            val onSearchIconDoubleTap = remember(playerViewModel) {
+                                { playerViewModel.onSearchNavIconDoubleTapped() }
+                            }
 
                             Surface(
                                 modifier = Modifier
@@ -695,7 +712,7 @@ class MainActivity : ComponentActivity() {
                                     navItems = commonNavItems,
                                     currentRoute = currentRoute,
                                     navBarStyle = navBarStyle,
-                                    onSearchIconDoubleTap = { playerViewModel.onSearchNavIconDoubleTapped() },
+                                    onSearchIconDoubleTap = onSearchIconDoubleTap,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -709,8 +726,12 @@ class MainActivity : ComponentActivity() {
                         val screenHeightPx = remember(configuration) { with(density) { configuration.containerSize.height } }
                         val containerHeight = this.maxHeight
 
-                        val stablePlayerState by playerViewModel.stablePlayerState.collectAsState()
-                        val showPlayerContentInitially = stablePlayerState.currentSong != null
+                        val showPlayerContentInitially by remember {
+                            playerViewModel.stablePlayerState
+                                .map { it.currentSong?.id != null }
+                                .distinctUntilChanged()
+                        }.collectAsState(initial = false)
+                        val usePlayerSheetV2 by userPreferencesRepository.usePlayerSheetV2Flow.collectAsState(initial = false)
 
                         val routesWithHiddenMiniPlayer = remember { setOf(Screen.NavBarCrRad.route) }
                         val shouldHideMiniPlayer by remember(currentRoute) {
@@ -734,20 +755,47 @@ class MainActivity : ComponentActivity() {
                             onOpenSidebar = { scope.launch { drawerState.open() } }
                         )
 
-                        UnifiedPlayerSheet(
-                            playerViewModel = playerViewModel,
-                            sheetCollapsedTargetY = sheetCollapsedTargetY,
-                            collapsedStateHorizontalPadding = horizontalPadding,
-                            hideMiniPlayer = shouldHideMiniPlayer,
-                            containerHeight = containerHeight,
-                            navController = navController,
-                            isNavBarHidden = shouldHideNavigationBar
-                        )
+                        if (usePlayerSheetV2) {
+                            UnifiedPlayerSheetV2(
+                                playerViewModel = playerViewModel,
+                                sheetCollapsedTargetY = sheetCollapsedTargetY,
+                                collapsedStateHorizontalPadding = horizontalPadding,
+                                hideMiniPlayer = shouldHideMiniPlayer,
+                                containerHeight = containerHeight,
+                                navController = navController,
+                                isNavBarHidden = shouldHideNavigationBar
+                            )
+                        } else {
+                            UnifiedPlayerSheet(
+                                playerViewModel = playerViewModel,
+                                sheetCollapsedTargetY = sheetCollapsedTargetY,
+                                collapsedStateHorizontalPadding = horizontalPadding,
+                                hideMiniPlayer = shouldHideMiniPlayer,
+                                containerHeight = containerHeight,
+                                navController = navController,
+                                isNavBarHidden = shouldHideNavigationBar
+                            )
+                        }
 
-                        val playerUiState by playerViewModel.playerUiState.collectAsState()
+                        val dismissUndoBarSlice by remember {
+                            playerViewModel.playerUiState
+                                .map { state ->
+                                    DismissUndoBarSlice(
+                                        isVisible = state.showDismissUndoBar,
+                                        durationMillis = state.undoBarVisibleDuration
+                                    )
+                                }
+                                .distinctUntilChanged()
+                        }.collectAsState(initial = DismissUndoBarSlice())
+                        val onUndoDismissPlaylist = remember(playerViewModel) {
+                            { playerViewModel.undoDismissPlaylist() }
+                        }
+                        val onCloseDismissUndoBar = remember(playerViewModel) {
+                            { playerViewModel.hideDismissUndoBar() }
+                        }
 
                         AnimatedVisibility(
-                            visible = playerUiState.showDismissUndoBar,
+                            visible = dismissUndoBarSlice.isVisible,
                             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                             exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
                             modifier = Modifier
@@ -760,9 +808,9 @@ class MainActivity : ComponentActivity() {
                                     .fillMaxWidth()
                                     .height(MiniPlayerHeight)
                                     .padding(horizontal = 14.dp),
-                                onUndo = { playerViewModel.undoDismissPlaylist() },
-                                onClose = { playerViewModel.hideDismissUndoBar() },
-                                durationMillis = playerUiState.undoBarVisibleDuration
+                                onUndo = onUndoDismissPlaylist,
+                                onClose = onCloseDismissUndoBar,
+                                durationMillis = dismissUndoBarSlice.durationMillis
                             )
                         }
                     }

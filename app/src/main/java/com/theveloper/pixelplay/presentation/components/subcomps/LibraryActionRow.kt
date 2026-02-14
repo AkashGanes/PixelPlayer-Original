@@ -401,7 +401,7 @@ fun Breadcrumbs(
         ) {
             item { Spacer(modifier = Modifier.width(12.dp)) }
 
-            items(pathSegments.size) { index ->
+            items(pathSegments.size, key = { pathSegments[it].second }) { index ->
                 val (name, path) = pathSegments[index]
                 val isLast = index == pathSegments.lastIndex
                 Text(

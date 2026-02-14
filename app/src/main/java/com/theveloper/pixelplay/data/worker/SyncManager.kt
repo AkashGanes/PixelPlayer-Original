@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.ExistingWorkPolicy
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.OneTimeWorkRequest
 import com.theveloper.pixelplay.data.preferences.UserPreferencesRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -139,10 +140,10 @@ class SyncManager @Inject constructor(
             }
 
             Log.i(TAG, "Startup sync requested - Scheduling Incremental Sync")
-            workManager.enqueueUniqueWork(
-                SyncWorker.WORK_NAME,
-                ExistingWorkPolicy.KEEP,
-                SyncWorker.incrementalSyncWork()
+            enqueueSyncWork(
+                request = SyncWorker.incrementalSyncWork(),
+                policy = ExistingWorkPolicy.KEEP,
+                notifyObserver = false
             )
         }
     }
@@ -153,8 +154,11 @@ class SyncManager @Inject constructor(
      * This is the recommended sync method for pull-to-refresh actions.
      */
     fun incrementalSync() {
-        Log.i(TAG, "Incremental sync requested - Triggering MediaStore rescan")
-        mediaStoreObserver.forceRescan()
+        Log.i(TAG, "Incremental sync requested - Scheduling incremental worker")
+        enqueueSyncWork(
+            request = SyncWorker.incrementalSyncWork(),
+            policy = ExistingWorkPolicy.REPLACE
+        )
     }
 
     /**
@@ -162,8 +166,11 @@ class SyncManager @Inject constructor(
      * Use this when the user explicitly wants to force a complete rescan.
      */
     fun fullSync() {
-        Log.i(TAG, "Full sync requested - Triggering MediaStore rescan")
-        mediaStoreObserver.forceRescan()
+        Log.i(TAG, "Full sync requested - Scheduling full sync worker")
+        enqueueSyncWork(
+            request = SyncWorker.fullSyncWork(),
+            policy = ExistingWorkPolicy.REPLACE
+        )
     }
 
     /**
@@ -172,8 +179,11 @@ class SyncManager @Inject constructor(
      * Use when database is corrupted or songs are missing.
      */
     fun rebuildDatabase() {
-        Log.i(TAG, "Rebuild database requested - Triggering MediaStore rescan")
-        mediaStoreObserver.forceRescan()
+        Log.i(TAG, "Rebuild database requested - Scheduling rebuild worker")
+        enqueueSyncWork(
+            request = SyncWorker.rebuildDatabaseWork(),
+            policy = ExistingWorkPolicy.REPLACE
+        )
     }
 
     /**
@@ -181,8 +191,27 @@ class SyncManager @Inject constructor(
      * existente. Ideal para el botón de "Refrescar Biblioteca".
      */
     fun forceRefresh() {
-        Log.i(TAG, "Force refresh requested - Triggering MediaStore rescan")
-        mediaStoreObserver.forceRescan()
+        Log.i(TAG, "Force refresh requested - Scheduling incremental worker")
+        enqueueSyncWork(
+            request = SyncWorker.incrementalSyncWork(),
+            policy = ExistingWorkPolicy.REPLACE
+        )
+    }
+
+    private fun enqueueSyncWork(
+        request: OneTimeWorkRequest,
+        policy: ExistingWorkPolicy,
+        notifyObserver: Boolean = true
+    ) {
+        workManager.enqueueUniqueWork(
+            SyncWorker.WORK_NAME,
+            policy,
+            request
+        )
+        if (notifyObserver) {
+            // Keep reactive MediaStore-based views in sync with manual refresh actions.
+            mediaStoreObserver.forceRescan()
+        }
     }
 
     companion object {
