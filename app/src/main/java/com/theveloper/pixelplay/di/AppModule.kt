@@ -94,7 +94,10 @@ object AppModule {
         ).addMigrations(
             PixelPlayDatabase.MIGRATION_3_4,
             PixelPlayDatabase.MIGRATION_4_5,
+            PixelPlayDatabase.MIGRATION_5_6,
             PixelPlayDatabase.MIGRATION_6_7,
+            PixelPlayDatabase.MIGRATION_7_8,
+            PixelPlayDatabase.MIGRATION_8_9,
             PixelPlayDatabase.MIGRATION_9_10,
             PixelPlayDatabase.MIGRATION_10_11,
             PixelPlayDatabase.MIGRATION_11_12,
@@ -104,7 +107,8 @@ object AppModule {
             PixelPlayDatabase.MIGRATION_15_16,
             PixelPlayDatabase.MIGRATION_16_17,
             PixelPlayDatabase.MIGRATION_17_18,
-            PixelPlayDatabase.MIGRATION_18_19
+            PixelPlayDatabase.MIGRATION_18_19,
+            PixelPlayDatabase.MIGRATION_19_20
         )
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()

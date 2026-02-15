@@ -20,7 +20,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         FavoritesEntity::class,
         LyricsEntity::class
     ],
-    version = 19, // Incremented for combined updates
+    version = 20, // Incremented for Telegram table schema reconciliation
 
     exportSchema = false
 )
@@ -35,6 +35,19 @@ abstract class PixelPlayDatabase : RoomDatabase() {
     abstract fun lyricsDao(): LyricsDao // Added FavoritesDao
 
     companion object {
+        // Gap-bridging no-op migrations for missing version ranges.
+        // These versions predate Telegram features; affected tables have since been
+        // recreated by later migrations (e.g. 15→16 drops/recreates album_art_themes).
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) { /* no-op gap bridge */ }
+        }
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) { /* no-op gap bridge */ }
+        }
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) { /* no-op gap bridge */ }
+        }
+
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE songs ADD COLUMN parent_directory_path TEXT NOT NULL DEFAULT ''")
@@ -304,6 +317,47 @@ abstract class PixelPlayDatabase : RoomDatabase() {
 
                 // The table is a cache; wipe stale rows so we always regenerate with full token data.
                 database.execSQL("DELETE FROM album_art_themes")
+            }
+        }
+
+        /**
+         * Reconcile Telegram tables: drop and recreate to match current entity definitions.
+         * Telegram data is re-syncable cache, so this is safe.
+         */
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Drop existing Telegram tables that may have schema drift
+                db.execSQL("DROP TABLE IF EXISTS telegram_songs")
+                db.execSQL("DROP TABLE IF EXISTS telegram_channels")
+
+                // Recreate telegram_songs matching TelegramSongEntity exactly
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS telegram_songs (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        chat_id INTEGER NOT NULL,
+                        message_id INTEGER NOT NULL,
+                        file_id INTEGER NOT NULL,
+                        title TEXT NOT NULL,
+                        artist TEXT NOT NULL,
+                        duration INTEGER NOT NULL,
+                        file_path TEXT NOT NULL,
+                        mime_type TEXT NOT NULL,
+                        date_added INTEGER NOT NULL,
+                        album_art_uri TEXT
+                    )
+                """.trimIndent())
+
+                // Recreate telegram_channels matching TelegramChannelEntity exactly
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS telegram_channels (
+                        chat_id INTEGER NOT NULL PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        username TEXT,
+                        song_count INTEGER NOT NULL DEFAULT 0,
+                        last_sync_time INTEGER NOT NULL DEFAULT 0,
+                        photo_path TEXT
+                    )
+                """.trimIndent())
             }
         }
     }
