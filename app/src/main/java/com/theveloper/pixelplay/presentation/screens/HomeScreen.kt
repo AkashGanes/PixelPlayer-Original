@@ -1,5 +1,6 @@
 package com.theveloper.pixelplay.presentation.screens
 
+import android.content.Intent
 import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -75,6 +76,7 @@ import com.theveloper.pixelplay.presentation.components.StatsOverviewCard
 import com.theveloper.pixelplay.presentation.model.mapRecentlyPlayedSongs
 import com.theveloper.pixelplay.presentation.components.subcomps.PlayingEqIcon
 import com.theveloper.pixelplay.presentation.navigation.Screen
+import com.theveloper.pixelplay.presentation.telegram.auth.TelegramLoginActivity
 import com.theveloper.pixelplay.presentation.viewmodel.PlayerViewModel
 import com.theveloper.pixelplay.presentation.viewmodel.SettingsViewModel
 import com.theveloper.pixelplay.presentation.viewmodel.StatsViewModel
@@ -178,7 +180,7 @@ fun HomeScreen(
                         showBetaInfoBottomSheet = true
                     },
                     onTelegramClick = {
-                         val intent = android.content.Intent(context, com.theveloper.pixelplay.presentation.telegram.auth.TelegramLoginActivity::class.java)
+                         val intent = Intent(context, TelegramLoginActivity::class.java)
                          context.startActivity(intent)
                     },
                     onMenuClick = {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -169,7 +170,7 @@ fun HomeGradientTopBar(
         actions = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                //horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.padding(end = 14.dp)
             ) {
                 FilledIconButton(
@@ -179,17 +180,12 @@ fun HomeGradientTopBar(
                     ),
                     onClick = onTelegramClick
                 ) {
-                     // Using Cloud icon as proxy for Telegram if generic, or maybe something better?
-                     // I will assume Icons.Rounded.Cloud is available or verify imports.
-                     // The previous file View showed `Icons` import.
-                     // I'll use a resource or standard icon.
-                     // Since I don't have a Telegram drawable confirmed, I'll use Cloud.
                     Icon(
-                         imageVector = androidx.compose.material.icons.Icons.Rounded.Cloud,
+                         imageVector = Icons.Rounded.Cloud,
                          contentDescription = "Telegram"
                     )
                 }
-                androidx.compose.foundation.layout.Spacer(Modifier.size(8.dp))
+                //Spacer(Modifier.size(8.dp))
                 FilledIconButton(
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -198,12 +194,12 @@ fun HomeGradientTopBar(
                     onClick = onMoreOptionsClick
                 ) {
                     Icon(
-                        modifier = Modifier.size(18.dp),
+                        //modifier = Modifier.size(18.dp),
                         painter = painterResource(R.drawable.round_newspaper_24),
                         contentDescription = "Changelog"
                     )
                 }
-                androidx.compose.foundation.layout.Spacer(Modifier.size(8.dp))
+                //Spacer(Modifier.size(8.dp))
                 FilledIconButton(
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
