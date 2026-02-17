@@ -670,20 +670,31 @@ class LyricsRepositoryImpl @Inject constructor(
             val cleanArtist = song.displayArtist.trim()
 
             // FAST STRATEGY: run all requests in parallel, keep first non-empty batch
-            val strategies = listOf(
-                RemoteSearchStrategy("query+artist") {
+            // FAST STRATEGY: run all requests in parallel, keep first non-empty batch
+            val strategies = buildList {
+                add(RemoteSearchStrategy("query+artist") {
                     lrcLibApiService.searchLyrics(query = combinedQuery, artistName = cleanArtist)
-                },
-                RemoteSearchStrategy("track+artist") {
+                })
+                add(RemoteSearchStrategy("track+artist") {
                     lrcLibApiService.searchLyrics(trackName = cleanTitle, artistName = cleanArtist)
-                },
-                RemoteSearchStrategy("track_only") {
-                    lrcLibApiService.searchLyrics(trackName = cleanTitle)
-                },
-                RemoteSearchStrategy("query_title_only") {
-                    lrcLibApiService.searchLyrics(query = cleanTitle)
+                })
+                
+                // Smart title cleanup strategy
+                val smartTitle = cleanTitleSmart(cleanTitle)
+                if (smartTitle != cleanTitle && smartTitle.isNotBlank()) {
+                    LogUtils.d(this@LyricsRepositoryImpl, "Adding smart search strategy for: '$smartTitle' (orig: '$cleanTitle')")
+                    add(RemoteSearchStrategy("smart_track_only") {
+                        lrcLibApiService.searchLyrics(trackName = smartTitle)
+                    })
                 }
-            )
+
+                add(RemoteSearchStrategy("track_only") {
+                    lrcLibApiService.searchLyrics(trackName = cleanTitle)
+                })
+                add(RemoteSearchStrategy("query_title_only") {
+                    lrcLibApiService.searchLyrics(query = cleanTitle)
+                })
+            }
 
             val uniqueResults = runSearchStrategiesFast(strategies)
 
@@ -964,6 +975,20 @@ class LyricsRepositoryImpl @Inject constructor(
             LogUtils.e(this, e, "Error creating temp file from URI")
             null
         }
+    }
+
+    private fun cleanTitleSmart(title: String): String {
+        // 1. Remove leading digits/spaces/dots/hyphens (e.g., "01 ", "01. ", "01 - ")
+        var cleaned = title.replace(Regex("^[\\d\\s.\\-]+"), "")
+        
+        // 2. Truncate at first special char (-, (, ))
+        // "Taare Ginn - Envy" -> "Taare Ginn "
+        // "Song (Feat. X)" -> "Song "
+        val splitRegex = Regex("[-()]")
+        cleaned = cleaned.split(splitRegex).firstOrNull() ?: cleaned
+        
+        // 3. Trim whitespace
+        return cleaned.trim()
     }
 }
 
