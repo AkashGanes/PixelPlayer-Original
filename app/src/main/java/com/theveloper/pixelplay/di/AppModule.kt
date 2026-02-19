@@ -119,7 +119,8 @@ object AppModule {
             PixelPlayDatabase.MIGRATION_19_20,
             PixelPlayDatabase.MIGRATION_20_21,
             PixelPlayDatabase.MIGRATION_21_22,
-            PixelPlayDatabase.MIGRATION_22_23
+            PixelPlayDatabase.MIGRATION_22_23,
+            PixelPlayDatabase.MIGRATION_23_24
         )
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
