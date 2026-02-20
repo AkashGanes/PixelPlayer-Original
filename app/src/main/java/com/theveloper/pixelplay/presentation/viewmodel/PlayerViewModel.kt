@@ -25,6 +25,9 @@ import androidx.media3.session.MediaController
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.media3.common.Timeline
 import androidx.media3.session.SessionCommand
@@ -682,9 +685,12 @@ class PlayerViewModel @Inject constructor(
     val albumsFlow: StateFlow<ImmutableList<Album>> = libraryStateHolder.albums
     val artistsFlow: StateFlow<ImmutableList<Artist>> = libraryStateHolder.artists
 
+    var searchQuery by mutableStateOf("")
+        private set
 
-
-
+    fun updateSearchQuery(query: String) {
+        searchQuery = query
+    }
 
     private var mediaController: MediaController? = null
     private val _isMediaControllerReady = MutableStateFlow(false)
@@ -1622,16 +1628,74 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    private var queueItemUndoTimerJob: Job? = null
+
     fun removeSongFromQueue(songId: String) {
         mediaController?.let { controller ->
             val currentQueue = _playerUiState.value.currentPlaybackQueue
             val indexToRemove = currentQueue.indexOfFirst { it.id == songId }
 
             if (indexToRemove != -1) {
+                val removedSong = currentQueue[indexToRemove]
                 // Command the player to remove the item. This is the source of truth for playback.
                 controller.removeMediaItem(indexToRemove)
 
+                // Store undo state
+                _playerUiState.update {
+                    it.copy(
+                        showQueueItemUndoBar = true,
+                        lastRemovedQueueSong = removedSong,
+                        lastRemovedQueueIndex = indexToRemove
+                    )
+                }
+
+                // Auto-hide the undo bar after a delay
+                queueItemUndoTimerJob?.cancel()
+                queueItemUndoTimerJob = viewModelScope.launch {
+                    delay(4000L)
+                    if (_playerUiState.value.showQueueItemUndoBar) {
+                        _playerUiState.update {
+                            it.copy(
+                                showQueueItemUndoBar = false,
+                                lastRemovedQueueSong = null,
+                                lastRemovedQueueIndex = -1
+                            )
+                        }
+                    }
+                }
             }
+        }
+    }
+
+    fun undoRemoveSongFromQueue() {
+        val song = _playerUiState.value.lastRemovedQueueSong ?: return
+        val index = _playerUiState.value.lastRemovedQueueIndex
+        if (index < 0) return
+
+        mediaController?.let { controller ->
+            val mediaItem = MediaItemBuilder.build(song)
+            val insertAt = index.coerceAtMost(controller.mediaItemCount)
+            controller.addMediaItem(insertAt, mediaItem)
+        }
+
+        queueItemUndoTimerJob?.cancel()
+        _playerUiState.update {
+            it.copy(
+                showQueueItemUndoBar = false,
+                lastRemovedQueueSong = null,
+                lastRemovedQueueIndex = -1
+            )
+        }
+    }
+
+    fun hideQueueItemUndoBar() {
+        queueItemUndoTimerJob?.cancel()
+        _playerUiState.update {
+            it.copy(
+                showQueueItemUndoBar = false,
+                lastRemovedQueueSong = null,
+                lastRemovedQueueIndex = -1
+            )
         }
     }
 
