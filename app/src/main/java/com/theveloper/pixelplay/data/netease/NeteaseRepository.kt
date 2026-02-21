@@ -651,9 +651,10 @@ class NeteaseRepository @Inject constructor(
         neteaseEntities: List<NeteaseSongEntity>
     ) {
         try {
-            // Convert Netease song entities to unified song IDs
+            // Convert Netease song entities to unified song IDs (Long format, stored as String)
+            // These must match the IDs generated in syncUnifiedLibrarySongsFromNetease
             val unifiedSongIds = neteaseEntities.map { entity ->
-                "netease_${entity.neteaseId}"
+                toUnifiedSongId(entity.neteaseId).toString()
             }
 
             val appPlaylistId = getAppPlaylistIdForNetease(neteasePlaylistId)
