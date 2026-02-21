@@ -2,6 +2,8 @@
 
 package com.theveloper.pixelplay.presentation.screens
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import android.os.Trace
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -484,7 +486,7 @@ fun LibraryScreen(
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         ),
                         onClick = {
-                            navController.navigate(Screen.Settings.route)
+                            navController.navigateSafely(Screen.Settings.route)
                         }
                     ) {
                         Icon(
@@ -920,7 +922,7 @@ fun LibraryScreen(
 
                                         val stableOnAlbumClick: (Long) -> Unit = remember(navController) {
                                             { albumId: Long ->
-                                                navController.navigate(Screen.AlbumDetail.createRoute(albumId))
+                                                navController.navigateSafely(Screen.AlbumDetail.createRoute(albumId))
                                             }
                                         }
                                         LibraryAlbumsTab(
@@ -945,7 +947,7 @@ fun LibraryScreen(
                                             playerViewModel = playerViewModel,
                                             bottomBarHeight = bottomBarHeightDp,
                                             onArtistClick = { artistId ->
-                                                navController.navigate(
+                                                navController.navigateSafely(
                                                     Screen.ArtistDetail.createRoute(
                                                         artistId
                                                     )
@@ -1017,7 +1019,7 @@ fun LibraryScreen(
                                                 onFolderClick = { folderPath -> playerViewModel.navigateToFolder(folderPath) },
                                                 onFolderAsPlaylistClick = { folder ->
                                                     val encodedPath = Uri.encode(folder.path)
-                                                    navController.navigate(
+                                                    navController.navigateSafely(
                                                         Screen.PlaylistDetail.createRoute(
                                                             "${PlaylistViewModel.FOLDER_PLAYLIST_PREFIX}$encodedPath"
                                                         )
@@ -1165,7 +1167,7 @@ fun LibraryScreen(
         },
         isAiEnabled = hasGeminiApiKey,
         onSetupAiClick = {
-            navController.navigate(Screen.SettingsCategory.createRoute("ai"))
+            navController.navigateSafely(Screen.SettingsCategory.createRoute("ai"))
         }
     )
 
@@ -1260,11 +1262,11 @@ fun LibraryScreen(
                 },
                 onDeleteFromDevice = playerViewModel::deleteFromDevice,
                 onNavigateToAlbum = {
-                    navController.navigate(Screen.AlbumDetail.createRoute(currentSong.albumId))
+                    navController.navigateSafely(Screen.AlbumDetail.createRoute(currentSong.albumId))
                     showSongInfoBottomSheet = false
                 },
                 onNavigateToArtist = {
-                    navController.navigate(Screen.ArtistDetail.createRoute(currentSong.artistId))
+                    navController.navigateSafely(Screen.ArtistDetail.createRoute(currentSong.artistId))
                     showSongInfoBottomSheet = false
                 },
                 onEditSong = { newTitle, newArtist, newAlbum, newGenre, newLyrics, newTrackNumber, coverArtUpdate ->

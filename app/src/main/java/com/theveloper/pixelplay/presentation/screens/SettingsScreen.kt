@@ -1,6 +1,7 @@
 package com.theveloper.pixelplay.presentation.screens
 
-import androidx.activity.compose.BackHandler
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.MutableTransitionState
@@ -75,7 +76,6 @@ import com.theveloper.pixelplay.presentation.components.ExpressiveTopBarContent
 import com.theveloper.pixelplay.presentation.components.MiniPlayerHeight
 import com.theveloper.pixelplay.presentation.model.SettingsCategory
 import com.theveloper.pixelplay.presentation.navigation.Screen
-import com.theveloper.pixelplay.presentation.viewmodel.PlayerSheetState
 import com.theveloper.pixelplay.presentation.viewmodel.PlayerViewModel
 import com.theveloper.pixelplay.presentation.viewmodel.SettingsViewModel
 import kotlin.math.roundToInt
@@ -96,11 +96,6 @@ fun SettingsScreen(
         onNavigationIconClick: () -> Unit,
         settingsViewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val playerSheetState by playerViewModel.sheetState.collectAsState()
-
-    BackHandler(enabled = playerSheetState == PlayerSheetState.EXPANDED) {
-        playerViewModel.collapsePlayerSheet()
-    }
 
     // Animation effects
     val transitionState = remember { MutableTransitionState(false) }
@@ -229,7 +224,7 @@ fun SettingsScreen(
                             category = category,
                             customColors = colors,
                             onClick = {
-                                navController.navigate(Screen.SettingsCategory.createRoute(category.id))
+                                navController.navigateSafely(Screen.SettingsCategory.createRoute(category.id))
                             },
                             shape = when {
                                 mainCategories.size == 1 -> RoundedCornerShape(24.dp)
@@ -250,7 +245,7 @@ fun SettingsScreen(
                 ExpressiveCategoryItem(
                     category = SettingsCategory.EQUALIZER,
                     customColors = getCategoryColors(SettingsCategory.EQUALIZER, isDark),
-                    onClick = { navController.navigate(Screen.Equalizer.route) }, // Direct navigation
+                    onClick = { navController.navigateSafely(Screen.Equalizer.route) }, // Direct navigation
                     shape = RoundedCornerShape(24.dp)
                 )
 
@@ -260,7 +255,7 @@ fun SettingsScreen(
                 ExpressiveCategoryItem(
                     category = SettingsCategory.DEVICE_CAPABILITIES,
                     customColors = getCategoryColors(SettingsCategory.DEVICE_CAPABILITIES, isDark),
-                    onClick = { navController.navigate(Screen.DeviceCapabilities.route) },
+                    onClick = { navController.navigateSafely(Screen.DeviceCapabilities.route) },
                     shape = RoundedCornerShape(24.dp)
                 )
 
@@ -270,7 +265,7 @@ fun SettingsScreen(
                 ExpressiveCategoryItem(
                     category = SettingsCategory.ABOUT,
                     customColors = getCategoryColors(SettingsCategory.ABOUT, isDark),
-                    onClick = { navController.navigate("about") }, // Direct navigation
+                    onClick = { navController.navigateSafely("about") }, // Direct navigation
                     shape = RoundedCornerShape(24.dp)
                 )
 
@@ -364,28 +359,28 @@ fun ExpressiveCategoryItem(
                     text = category.subtitle,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                    maxLines = 2
                 )
             }
             
             Spacer(modifier = Modifier.width(8.dp))
             
-            // Chevron or indicator
-             Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            ) {
-                 Icon(
-                    imageVector = Icons.Rounded.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+//            // Chevron or indicator
+//             Box(
+//                contentAlignment = Alignment.Center,
+//                modifier = Modifier
+//                    .size(36.dp)
+//                    .clip(CircleShape)
+//                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+//            ) {
+//                 Icon(
+//                    imageVector = Icons.Rounded.ChevronRight,
+//                    contentDescription = null,
+//                    tint = MaterialTheme.colorScheme.onSurface,
+//                    modifier = Modifier.size(20.dp)
+//                )
+//            }
         }
     }
 }

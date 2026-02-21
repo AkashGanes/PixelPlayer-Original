@@ -1,5 +1,7 @@
 package com.theveloper.pixelplay.presentation.screens
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -382,7 +384,7 @@ fun SearchScreen(
                                 Timber.tag("SearchScreen")
                                     .d("Genre clicked: ${genre.name} (ID: ${genre.id})")
                                 val encodedGenreId = java.net.URLEncoder.encode(genre.id, "UTF-8")
-                                navController.navigate(Screen.GenreDetail.createRoute(encodedGenreId))
+                                navController.navigateSafely(Screen.GenreDetail.createRoute(encodedGenreId))
                             },
                             playerViewModel = playerViewModel,
                             modifier = Modifier.padding(top = 12.dp)
@@ -476,11 +478,11 @@ fun SearchScreen(
                 },
                 onDeleteFromDevice = playerViewModel::deleteFromDevice,
                 onNavigateToAlbum = {
-                    navController.navigate(Screen.AlbumDetail.createRoute(currentSong.albumId))
+                    navController.navigateSafely(Screen.AlbumDetail.createRoute(currentSong.albumId))
                     showSongInfoBottomSheet = false
                 },
                 onNavigateToArtist = {
-                    navController.navigate(Screen.ArtistDetail.createRoute(currentSong.artistId))
+                    navController.navigateSafely(Screen.ArtistDetail.createRoute(currentSong.artistId))
                     showSongInfoBottomSheet = false
                 },
                 onEditSong = { newTitle, newArtist, newAlbum, newGenre, newLyrics, newTrackNumber, coverArtUpdate ->
@@ -758,7 +760,7 @@ fun SearchResultsList(
                                     item.album,
                                     playerViewModel, onItemSelected ) {
                                     {
-                                        navController.navigate(Screen.AlbumDetail.createRoute(item.album.id))
+                                        navController.navigateSafely(Screen.AlbumDetail.createRoute(item.album.id))
                                         onItemSelected()
                                     }
                                 }
@@ -782,7 +784,7 @@ fun SearchResultsList(
                                     item.artist,
                                     playerViewModel, onItemSelected ) {
                                     {
-                                        navController.navigate(Screen.ArtistDetail.createRoute(item.artist.id))
+                                        navController.navigateSafely(Screen.ArtistDetail.createRoute(item.artist.id))
                                         onItemSelected()
                                     }
                                 }
@@ -818,7 +820,7 @@ fun SearchResultsList(
                                     item.playlist,
                                     playerViewModel, onItemSelected ) {
                                     {
-                                        navController.navigate(Screen.PlaylistDetail.createRoute(item.playlist.id))
+                                        navController.navigateSafely(Screen.PlaylistDetail.createRoute(item.playlist.id))
                                         onItemSelected()
                                     }
                                 }
