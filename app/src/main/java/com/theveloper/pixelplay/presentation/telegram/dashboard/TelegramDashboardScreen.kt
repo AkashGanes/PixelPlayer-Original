@@ -512,7 +512,7 @@ private fun ChannelActionsBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+//            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
                 text = channel.title,
@@ -523,7 +523,7 @@ private fun ChannelActionsBottomSheet(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = usernameLabel ?: "Public Telegram channel",
                 style = MaterialTheme.typography.bodyMedium,
@@ -532,7 +532,7 @@ private fun ChannelActionsBottomSheet(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-
+            Spacer(modifier = Modifier.height(14.dp))
             ChannelActionCard(
                 title = if (isSyncing) "Syncing channel" else "Sync now",
                 subtitle = if (isSyncing) {
@@ -557,7 +557,7 @@ private fun ChannelActionsBottomSheet(
                     null
                 }
             )
-
+            Spacer(modifier = Modifier.height(14.dp))
             ChannelActionCard(
                 title = "Remove channel",
                 subtitle = "Stop syncing and remove cached songs",
