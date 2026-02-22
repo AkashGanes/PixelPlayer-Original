@@ -36,7 +36,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -113,12 +113,12 @@ fun HomeScreen(
         (context as? android.app.Activity)?.intent?.getBooleanExtra("is_benchmark", false) ?: false
     }
     val statsViewModel: StatsViewModel = hiltViewModel()
-    val settingsUiState by settingsViewModel.uiState.collectAsState()
+    val settingsUiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
     // 1) Observar sólo la lista de canciones, que cambia con poca frecuencia
-    val allSongs by playerViewModel.allSongsFlow.collectAsState(initial = emptyList())
-    val dailyMixSongs by playerViewModel.dailyMixSongs.collectAsState()
-    val curatedYourMixSongs by playerViewModel.yourMixSongs.collectAsState()
-    val playbackHistory by playerViewModel.playbackHistory.collectAsState()
+    val allSongs by playerViewModel.allSongsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val dailyMixSongs by playerViewModel.dailyMixSongs.collectAsStateWithLifecycle()
+    val curatedYourMixSongs by playerViewModel.yourMixSongs.collectAsStateWithLifecycle()
+    val playbackHistory by playerViewModel.playbackHistory.collectAsStateWithLifecycle()
 
     val yourMixSongs = remember(curatedYourMixSongs, dailyMixSongs, allSongs) {
         when {
@@ -147,14 +147,14 @@ fun HomeScreen(
     // 2) Observar sólo el currentSong (o null) para saber si mostrar padding
     val currentSong by remember(playerViewModel.stablePlayerState) {
         playerViewModel.stablePlayerState.map { it.currentSong }
-    }.collectAsState(initial = null)
+    }.collectAsStateWithLifecycle(initialValue = null)
 
     // 3) Observe shuffle state for sync
     val isShuffleEnabled by remember(playerViewModel.stablePlayerState) {
         playerViewModel.stablePlayerState
             .map { it.isShuffleEnabled }
             .distinctUntilChanged()
-    }.collectAsState(initial = false)
+    }.collectAsStateWithLifecycle(initialValue = false)
 
     // Padding inferior si hay canción en reproducción
     val bottomPadding = if (currentSong != null) MiniPlayerHeight else 0.dp
@@ -168,7 +168,7 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     LocalContext.current
 
-    val weeklyStats by statsViewModel.weeklyOverview.collectAsState()
+    val weeklyStats by statsViewModel.weeklyOverview.collectAsStateWithLifecycle()
 
     // Drawer state for sidebar
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -355,7 +355,7 @@ fun HomeScreen(
         }
     }
     if (showStreamingProviderSheet) {
-        val isNeteaseLoggedIn by neteaseViewModel.isLoggedIn.collectAsState()
+        val isNeteaseLoggedIn by neteaseViewModel.isLoggedIn.collectAsStateWithLifecycle()
         StreamingProviderSheet(
             onDismissRequest = { showStreamingProviderSheet = false },
             isNeteaseLoggedIn = isNeteaseLoggedIn,
@@ -518,7 +518,7 @@ fun SongListItemFavsWrapper(
     modifier: Modifier = Modifier
 ) {
     // Collect the stablePlayerState once
-    val stablePlayerState by playerViewModel.stablePlayerStateInfrequent.collectAsState()
+    val stablePlayerState by playerViewModel.stablePlayerState.collectAsStateWithLifecycle()
 
     // Derive isThisSongPlaying using remember
     val isThisSongPlaying = remember(song.id, stablePlayerState.currentSong?.id, stablePlayerState.isPlaying) {

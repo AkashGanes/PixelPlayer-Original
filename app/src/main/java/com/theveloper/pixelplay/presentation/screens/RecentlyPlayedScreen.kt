@@ -49,7 +49,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -105,16 +105,16 @@ fun RecentlyPlayedScreen(
 ) {
     Trace.beginSection("RecentlyPlayedScreen.Composition")
 
-    val allSongs by playerViewModel.allSongsFlow.collectAsState()
-    val playbackHistory by playerViewModel.playbackHistory.collectAsState()
+    val allSongs by playerViewModel.allSongsFlow.collectAsStateWithLifecycle()
+    val playbackHistory by playerViewModel.playbackHistory.collectAsStateWithLifecycle()
     val currentSongId by remember(playerViewModel.stablePlayerState) {
         playerViewModel.stablePlayerState.map { it.currentSong?.id }.distinctUntilChanged()
-    }.collectAsState(initial = null)
+    }.collectAsStateWithLifecycle(initialValue = null)
     val isPlaying by remember(playerViewModel.stablePlayerState) {
         playerViewModel.stablePlayerState.map { it.isPlaying }.distinctUntilChanged()
-    }.collectAsState(initial = false)
-    val favoriteSongIds by playerViewModel.favoriteSongIds.collectAsState()
-    val playlistUiState by playlistViewModel.uiState.collectAsState()
+    }.collectAsStateWithLifecycle(initialValue = false)
+    val favoriteSongIds by playerViewModel.favoriteSongIds.collectAsStateWithLifecycle()
+    val playlistUiState by playlistViewModel.uiState.collectAsStateWithLifecycle()
 
     var selectedRange by rememberSaveable { mutableStateOf(StatsTimeRange.WEEK) }
     val lazyListState = rememberLazyListState()

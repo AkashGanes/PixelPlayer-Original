@@ -59,12 +59,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.TabPosition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf // Added
@@ -159,7 +158,7 @@ fun EqualizerScreen(
     playerViewModel: PlayerViewModel = hiltViewModel(),
     equalizerViewModel: EqualizerViewModel = hiltViewModel()
 ) {
-    val uiState by equalizerViewModel.uiState.collectAsState()
+    val uiState by equalizerViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     
     // Sheet States
@@ -366,7 +365,7 @@ fun EqualizerScreen(
             
             // Volume Control
             item(key = "volume_control") {
-                val volume by equalizerViewModel.systemVolume.collectAsState()
+                val volume by equalizerViewModel.systemVolume.collectAsStateWithLifecycle()
                 VolumeControlCard(
                     volume = volume,
                     onVolumeChange = { equalizerViewModel.setSystemVolume(it) }
@@ -454,18 +453,18 @@ private fun PresetTabsRow(
     // We don't use a Pager, so we need a manual scroll state if we wanted to auto-scroll.
     // Standard ScrollableTabRow handles scrolling to selected index automatically.
     
-    ScrollableTabRow(
+    PrimaryScrollableTabRow(
         selectedTabIndex = selectedIndex,
         edgePadding = 12.dp,
         containerColor = Color.Transparent,
         divider = {},
-        indicator = { tabPositions ->
-            if (showTabIndicator && selectedIndex < tabPositions.size) {
+        indicator = {
+            if (showTabIndicator) {
                  TabRowDefaults.PrimaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedIndex]),
+                    modifier = Modifier.tabIndicatorOffset(selectedTabIndex = selectedIndex),
                     height = 3.dp,
                     width = 20.dp, // Fixed width for expressive dot? Or default width? Library used default.
-                    // Library code: Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]), height = 3.dp
+                    // Library code: Modifier.tabIndicatorOffset(selectedTabIndex = pagerState.currentPage), height = 3.dp
                     // Let's stick to default width (match content) but custom height/color.
                     shape = RoundedCornerShape(3.dp),
                     color = MaterialTheme.colorScheme.primary
@@ -1597,17 +1596,17 @@ private fun HybridBandSliders(
 
         Column(modifier = Modifier.padding(horizontal = 0.dp)) {
             // Tabs Row (Matching PresetTabsRow style)
-            ScrollableTabRow(
+            PrimaryScrollableTabRow(
                 selectedTabIndex = selectedTabIndex,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 containerColor = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.primary,
                 edgePadding = 12.dp,
                 divider = {},
-                indicator = { tabPositions ->
-                    if (showBandPageTabIndicator && selectedTabIndex < tabPositions.size) {
+                indicator = {
+                    if (showBandPageTabIndicator) {
                          TabRowDefaults.PrimaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                            modifier = Modifier.tabIndicatorOffset(selectedTabIndex = selectedTabIndex),
                             height = 3.dp,
                             width = 20.dp,
                             shape = RoundedCornerShape(3.dp),

@@ -1,6 +1,7 @@
 package com.theveloper.pixelplay.presentation.screens
 
 import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -113,14 +114,14 @@ fun GenreDetailScreen(
     viewModel: GenreDetailViewModel = hiltViewModel(),
     playlistViewModel: com.theveloper.pixelplay.presentation.viewmodel.PlaylistViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val stablePlayerState by playerViewModel.stablePlayerStateInfrequent.collectAsState()
-    val favoriteSongIds by playerViewModel.favoriteSongIds.collectAsState()
-    val playlistUiState by playlistViewModel.uiState.collectAsState()
-    val libraryGenres by playerViewModel.genres.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val stablePlayerState by playerViewModel.stablePlayerState.collectAsStateWithLifecycle()
+    val favoriteSongIds by playerViewModel.favoriteSongIds.collectAsStateWithLifecycle()
+    val playlistUiState by playlistViewModel.uiState.collectAsStateWithLifecycle()
+    val libraryGenres by playerViewModel.genres.collectAsStateWithLifecycle()
     
     // Get artists to resolve images
-    val artists by playerViewModel.artistsFlow.collectAsState(initial = persistentListOf())
+    val artists by playerViewModel.artistsFlow.collectAsStateWithLifecycle(initialValue = persistentListOf())
 
     val darkMode = LocalPixelPlayDarkTheme.current
 
@@ -228,8 +229,8 @@ fun GenreDetailScreen(
         decodedGenreId.equals("unknown", ignoreCase = true) || decodedGenreId.equals("unknown genre", ignoreCase = true)
     }
     
-    val customGenres by playerViewModel.customGenres.collectAsState()
-    val customGenreIcons by playerViewModel.customGenreIcons.collectAsState()
+    val customGenres by playerViewModel.customGenres.collectAsStateWithLifecycle()
+    val customGenreIcons by playerViewModel.customGenreIcons.collectAsStateWithLifecycle()
     val isMiniPlayerVisible = stablePlayerState.currentSong != null
     val fabBottomPadding by animateDpAsState(
         targetValue = if (isMiniPlayerVisible) MiniPlayerHeight + 16.dp else 16.dp, 

@@ -34,6 +34,7 @@ import com.theveloper.pixelplay.data.database.NeteasePlaylistEntity
 import com.theveloper.pixelplay.presentation.components.SmartImage
 import com.theveloper.pixelplay.ui.theme.GoogleSansRounded
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -41,9 +42,9 @@ fun NeteaseDashboardScreen(
     viewModel: NeteaseDashboardViewModel = hiltViewModel(),
     onBack: () -> Unit
 ) {
-    val playlists by viewModel.playlists.collectAsState()
-    val isSyncing by viewModel.isSyncing.collectAsState()
-    val syncMessage by viewModel.syncMessage.collectAsState()
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val syncMessage by viewModel.syncMessage.collectAsStateWithLifecycle()
 
     val cardShape = AbsoluteSmoothCornerShape(
         cornerRadiusTR = 20.dp, cornerRadiusTL = 20.dp,

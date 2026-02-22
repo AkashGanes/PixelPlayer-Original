@@ -98,7 +98,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -172,21 +172,21 @@ fun SettingsCategoryScreen(
     val context = LocalContext.current
     
     // State Collection (Duplicated from SettingsScreen for now to ensure functionality)
-    val uiState by settingsViewModel.uiState.collectAsState()
-    val geminiApiKey by settingsViewModel.geminiApiKey.collectAsState()
-    val geminiModel by settingsViewModel.geminiModel.collectAsState()
-    val geminiSystemPrompt by settingsViewModel.geminiSystemPrompt.collectAsState()
-    val currentPath by settingsViewModel.currentPath.collectAsState()
-    val directoryChildren by settingsViewModel.currentDirectoryChildren.collectAsState()
-    val availableStorages by settingsViewModel.availableStorages.collectAsState()
-    val selectedStorageIndex by settingsViewModel.selectedStorageIndex.collectAsState()
-    val isLoadingDirectories by settingsViewModel.isLoadingDirectories.collectAsState()
-    val isExplorerPriming by settingsViewModel.isExplorerPriming.collectAsState()
-    val isExplorerReady by settingsViewModel.isExplorerReady.collectAsState()
-    val isSyncing by settingsViewModel.isSyncing.collectAsState()
-    val syncProgress by settingsViewModel.syncProgress.collectAsState()
-    val dataTransferProgress by settingsViewModel.dataTransferProgress.collectAsState()
-    val allSongs by playerViewModel.allSongsFlow.collectAsState()
+    val uiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
+    val geminiApiKey by settingsViewModel.geminiApiKey.collectAsStateWithLifecycle()
+    val geminiModel by settingsViewModel.geminiModel.collectAsStateWithLifecycle()
+    val geminiSystemPrompt by settingsViewModel.geminiSystemPrompt.collectAsStateWithLifecycle()
+    val currentPath by settingsViewModel.currentPath.collectAsStateWithLifecycle()
+    val directoryChildren by settingsViewModel.currentDirectoryChildren.collectAsStateWithLifecycle()
+    val availableStorages by settingsViewModel.availableStorages.collectAsStateWithLifecycle()
+    val selectedStorageIndex by settingsViewModel.selectedStorageIndex.collectAsStateWithLifecycle()
+    val isLoadingDirectories by settingsViewModel.isLoadingDirectories.collectAsStateWithLifecycle()
+    val isExplorerPriming by settingsViewModel.isExplorerPriming.collectAsStateWithLifecycle()
+    val isExplorerReady by settingsViewModel.isExplorerReady.collectAsStateWithLifecycle()
+    val isSyncing by settingsViewModel.isSyncing.collectAsStateWithLifecycle()
+    val syncProgress by settingsViewModel.syncProgress.collectAsStateWithLifecycle()
+    val dataTransferProgress by settingsViewModel.dataTransferProgress.collectAsStateWithLifecycle()
+    val allSongs by playerViewModel.allSongsFlow.collectAsStateWithLifecycle()
     val explorerRoot = settingsViewModel.explorerRoot()
 
     // Local State
@@ -456,7 +456,7 @@ fun SettingsCategoryScreen(
                             }
                         }
                         SettingsCategory.APPEARANCE -> {
-                            val useSmoothCorners by settingsViewModel.useSmoothCorners.collectAsState()
+                            val useSmoothCorners by settingsViewModel.useSmoothCorners.collectAsStateWithLifecycle()
 
                             SettingsSubsection(title = "Global Theme") {
                                 ThemeSelectorItem(

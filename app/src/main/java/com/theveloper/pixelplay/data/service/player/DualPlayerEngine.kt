@@ -198,6 +198,9 @@ class DualPlayerEngine @Inject constructor(
 
     private var isReleased = false
 
+    // Cache of pre-resolved URIs: original cloud URI string -> resolved playable URI
+    private val resolvedUriCache = java.util.concurrent.ConcurrentHashMap<String, Uri>()
+
     init {
         initialize()
     }
@@ -306,95 +309,25 @@ class DualPlayerEngine @Inject constructor(
             .setUsage(C.USAGE_MEDIA)
             .build()
             
+        // Lightweight synchronous resolver: only performs cache lookups, NEVER blocks.
+        // All heavy resolution (network I/O, proxy readiness) is done ahead of time
+        // in resolveCloudUri() which is called from coroutines before ExoPlayer sees the URI.
         val resolver = object : ResolvingDataSource.Resolver {
             override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
-                 if (dataSpec.uri.scheme == "telegram") {
-                     var fileId: Int? = null
-                     var fileSize: Long = 0L
-                     
-                     // Check for New Scheme: telegram://chatId/messageId
-                     // We use runBlocking because resolveDataSpec is synchronous but we need to fetch info from TdLib
-                     val pathSegments = dataSpec.uri.pathSegments
-                     if (pathSegments.isNotEmpty()) {
-                         val uriString = dataSpec.uri.toString()
-                         val result = kotlinx.coroutines.runBlocking { 
-                             telegramRepository.resolveTelegramUri(uriString) 
-                         }
-                         fileId = result?.first
-                         fileSize = result?.second ?: 0L
-                     } else {
-                         // Fallback to Legacy Scheme: telegram://fileId (host)
-                         // Legacy scheme doesn't have size info, proxy will fallback to disk size
-                         fileId = dataSpec.uri.host?.toIntOrNull()
-                     }
-
-                     if (fileId != null) {
-                         Timber.tag("DualPlayerEngine").d("Resolving Telegram URI for fileId: $fileId...")
-                         
-                         // Fix: Check if file is already downloaded to use direct file access
-                         // This solves "plays fast" and skipping issues related to streaming completely downloaded files
-                         val fileInfo = kotlinx.coroutines.runBlocking {
-                             telegramRepository.getFile(fileId)
-                         }
-                         
-                         if (fileInfo?.local?.isDownloadingCompleted == true && fileInfo.local.path.isNotEmpty()) {
-                              Timber.tag("DualPlayerEngine").d("File $fileId is downloaded. Using direct file playback.")
-                              return dataSpec.buildUpon().setUri(android.net.Uri.fromFile(java.io.File(fileInfo.local.path))).build()
-                         }
-
-                         // Not cached locally. Check connectivity.
-                         val isOnline = connectivityStateHolder.isOnline.value
-                         if (!isOnline) {
-                             Timber.tag("DualPlayerEngine").w("Blocked playback: Offline and not cached (fileId=$fileId). Triggering UI event.")
-                             connectivityStateHolder.triggerOfflineBlockedEvent()
-                             // Return original to let it fail or handled by error propagation.
-                             return dataSpec
-                         }
-
-                         Timber.tag("DualPlayerEngine").d("File $fileId not downloaded or Check failed. Using StreamProxy.")
-
-                         // Wait for StreamProxy to be ready before getting proxy URL
-                         // This fixes playback failures when app restarts
-                         if (!telegramStreamProxy.isReady()) {
-                             Timber.tag("DualPlayerEngine").w("StreamProxy not ready, waiting...")
-                             val proxyReady = kotlinx.coroutines.runBlocking {
-                                 telegramStreamProxy.awaitReady(5_000L) // 5 second timeout
-                             }
-                             if (!proxyReady) {
-                                 Timber.tag("DualPlayerEngine").e("StreamProxy not ready after timeout - playback will fail")
-                                 // Return original dataSpec - will cause error but better than hanging
-                                 return dataSpec
-                             }
-                         }
-                         
-                         val proxyUrl = telegramStreamProxy.getProxyUrl(fileId, fileSize)
-                         if (proxyUrl.isNotEmpty()) {
-                             return dataSpec.buildUpon().setUri(android.net.Uri.parse(proxyUrl)).build()
-                         }
-                     }
-                 } else if (dataSpec.uri.scheme == "netease") {
-                     val uriString = dataSpec.uri.toString()
-                     Timber.tag("DualPlayerEngine").d("Resolving Netease URI: $uriString")
-
-                     if (!neteaseStreamProxy.isReady()) {
-                         Timber.tag("DualPlayerEngine").w("NeteaseStreamProxy not ready, waiting...")
-                         val proxyReady = kotlinx.coroutines.runBlocking {
-                             neteaseStreamProxy.awaitReady(5_000L)
-                         }
-                         if (!proxyReady) {
-                             Timber.tag("DualPlayerEngine").e("NeteaseStreamProxy not ready after timeout")
-                             return dataSpec
-                         }
-                     }
-
-                     val proxyUrl = neteaseStreamProxy.resolveNeteaseUri(uriString)
-                     if (!proxyUrl.isNullOrBlank()) {
-                         return dataSpec.buildUpon().setUri(android.net.Uri.parse(proxyUrl)).build()
-                     }
-
-                     Timber.tag("DualPlayerEngine").w("Failed to resolve Netease URI: $uriString")
-                 }
-                 return dataSpec
+                val scheme = dataSpec.uri.scheme
+                if (scheme == "telegram" || scheme == "netease") {
+                    val originalUri = dataSpec.uri.toString()
+                    val resolved = resolvedUriCache[originalUri]
+                    if (resolved != null) {
+                        Timber.tag("DualPlayerEngine").d("resolveDataSpec: cache hit for $scheme URI")
+                        return dataSpec.buildUpon().setUri(resolved).build()
+                    }
+                    // Cache miss — URI was not pre-resolved. Log warning but do NOT block.
+                    // This can happen if the URI was added to the queue without pre-resolution
+                    // (e.g., via external intent or legacy code path).
+                    Timber.tag("DualPlayerEngine").w("resolveDataSpec: cache MISS for $originalUri — playback may fail")
+                }
+                return dataSpec
             }
         }
         
@@ -433,15 +366,136 @@ class DualPlayerEngine @Inject constructor(
     }
 
     /**
-     * Prepares the auxiliary player (Player B) with the next media item.
+     * Resolves a cloud URI (telegram:// or netease://) to a playable URI.
+     * Performs all network I/O and proxy readiness checks on the calling coroutine,
+     * keeping ExoPlayer's playback thread free from blocking.
+     *
+     * Results are cached in [resolvedUriCache] for the synchronous [resolveDataSpec] to use.
+     *
+     * @return The resolved playable URI, or the original URI if resolution fails/not needed.
      */
-    fun prepareNext(mediaItem: MediaItem, startPositionMs: Long = 0L) {
+    suspend fun resolveCloudUri(uri: Uri): Uri {
+        val uriString = uri.toString()
+
+        // Fast path: already resolved
+        resolvedUriCache[uriString]?.let { return it }
+
+        val resolved: Uri? = when (uri.scheme) {
+            "telegram" -> resolveTelegramUriAsync(uri, uriString)
+            "netease" -> resolveNeteaseUriAsync(uriString)
+            else -> null
+        }
+
+        if (resolved != null) {
+            resolvedUriCache[uriString] = resolved
+            return resolved
+        }
+        return uri
+    }
+
+    private suspend fun resolveTelegramUriAsync(uri: Uri, uriString: String): Uri? {
+        var fileId: Int? = null
+        var fileSize: Long = 0L
+
+        val pathSegments = uri.pathSegments
+        if (pathSegments.isNotEmpty()) {
+            val result = telegramRepository.resolveTelegramUri(uriString)
+            fileId = result?.first
+            fileSize = result?.second ?: 0L
+        } else {
+            // Fallback to Legacy Scheme: telegram://fileId (host)
+            fileId = uri.host?.toIntOrNull()
+        }
+
+        if (fileId == null) return null
+
+        Timber.tag("DualPlayerEngine").d("Async resolving Telegram URI for fileId: $fileId")
+
+        // Check if file is already downloaded to use direct file access
+        val fileInfo = telegramRepository.getFile(fileId)
+        if (fileInfo?.local?.isDownloadingCompleted == true && fileInfo.local.path.isNotEmpty()) {
+            Timber.tag("DualPlayerEngine").d("File $fileId is downloaded. Using direct file playback.")
+            return Uri.fromFile(File(fileInfo.local.path))
+        }
+
+        // Not cached locally. Check connectivity.
+        val isOnline = connectivityStateHolder.isOnline.value
+        if (!isOnline) {
+            Timber.tag("DualPlayerEngine").w("Blocked playback: Offline and not cached (fileId=$fileId).")
+            connectivityStateHolder.triggerOfflineBlockedEvent()
+            return null
+        }
+
+        Timber.tag("DualPlayerEngine").d("File $fileId not downloaded. Using StreamProxy.")
+
+        // Wait for StreamProxy to be ready (non-blocking — runs on coroutine)
+        if (!telegramStreamProxy.isReady()) {
+            Timber.tag("DualPlayerEngine").w("StreamProxy not ready, awaiting...")
+            val proxyReady = telegramStreamProxy.awaitReady(5_000L)
+            if (!proxyReady) {
+                Timber.tag("DualPlayerEngine").e("StreamProxy not ready after timeout")
+                return null
+            }
+        }
+
+        val proxyUrl = telegramStreamProxy.getProxyUrl(fileId, fileSize)
+        return if (proxyUrl.isNotEmpty()) Uri.parse(proxyUrl) else null
+    }
+
+    private suspend fun resolveNeteaseUriAsync(uriString: String): Uri? {
+        Timber.tag("DualPlayerEngine").d("Async resolving Netease URI: $uriString")
+
+        if (!neteaseStreamProxy.isReady()) {
+            Timber.tag("DualPlayerEngine").w("NeteaseStreamProxy not ready, awaiting...")
+            val proxyReady = neteaseStreamProxy.awaitReady(5_000L)
+            if (!proxyReady) {
+                Timber.tag("DualPlayerEngine").e("NeteaseStreamProxy not ready after timeout")
+                return null
+            }
+        }
+
+        val proxyUrl = neteaseStreamProxy.resolveNeteaseUri(uriString)
+        if (!proxyUrl.isNullOrBlank()) {
+            return Uri.parse(proxyUrl)
+        }
+
+        Timber.tag("DualPlayerEngine").w("Failed to resolve Netease URI: $uriString")
+        return null
+    }
+
+    /**
+     * Resolves a MediaItem's cloud URI (if any) and returns a copy with the resolved URI.
+     * For non-cloud URIs, returns the original MediaItem unchanged.
+     */
+    suspend fun resolveMediaItem(mediaItem: MediaItem): MediaItem {
+        val uri = mediaItem.localConfiguration?.uri ?: return mediaItem
+        val scheme = uri.scheme
+        if (scheme != "telegram" && scheme != "netease") return mediaItem
+
+        val resolvedUri = resolveCloudUri(uri)
+        if (resolvedUri == uri) return mediaItem // Resolution failed or not needed
+
+        // Rebuild MediaItem with resolved URI, preserving metadata
+        return mediaItem.buildUpon()
+            .setUri(resolvedUri)
+            .build()
+    }
+
+    /**
+     * Prepares the auxiliary player (Player B) with the next media item.
+     * Cloud URIs are resolved asynchronously before passing to ExoPlayer.
+     */
+    suspend fun prepareNext(mediaItem: MediaItem, startPositionMs: Long = 0L) {
         try {
             Timber.tag("TransitionDebug").d("Engine: prepareNext called for %s", mediaItem.mediaId)
+
+            // Pre-resolve cloud URI on the coroutine (non-blocking for ExoPlayer)
+            val resolvedItem = resolveMediaItem(mediaItem)
+
             playerB.stop()
             playerB.clearMediaItems()
             playerB.playWhenReady = false
-            playerB.setMediaItem(mediaItem)
+            playerB.setMediaItem(resolvedItem)
             
             // Set appropriate WakeMode for the next item
             val scheme = mediaItem.localConfiguration?.uri?.scheme

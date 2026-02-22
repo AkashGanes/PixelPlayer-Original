@@ -18,6 +18,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -177,8 +178,8 @@ fun LyricsSheet(
     autoscrollAnimationSpec: AnimationSpec<Float>? = null // null = auto-detect from preference
 ) {
     BackHandler { onBackClick() }
-    val stablePlayerState by stablePlayerStateFlow.collectAsState()
-    val playbackPosition by playbackPositionFlow.collectAsState(initial = 0L)
+    val stablePlayerState by stablePlayerStateFlow.collectAsStateWithLifecycle()
+    val playbackPosition by playbackPositionFlow.collectAsStateWithLifecycle(initialValue = 0L)
 
     val isLoadingLyrics by remember { derivedStateOf { stablePlayerState.isLoadingLyrics } }
     val lyrics by remember { derivedStateOf { stablePlayerState.lyrics } }
@@ -191,7 +192,7 @@ fun LyricsSheet(
     val useAnimatedLyricsFlow = remember(context) {
         context.dataStore.data.map { it[booleanPreferencesKey("use_animated_lyrics")] ?: false }
     }
-    val useAnimatedLyrics by useAnimatedLyricsFlow.collectAsState(initial = false)
+    val useAnimatedLyrics by useAnimatedLyricsFlow.collectAsStateWithLifecycle(initialValue = false)
 
     val resolvedAutoscrollSpec = autoscrollAnimationSpec ?: if (useAnimatedLyrics) {
         spring(
@@ -878,7 +879,7 @@ fun SyncedLyricsList(
     footer: LazyListScope.() -> Unit = {}
 ) {
     val density = LocalDensity.current
-    val position by positionFlow.collectAsState(initial = 0L)
+    val position by positionFlow.collectAsStateWithLifecycle(initialValue = 0L)
     val currentLineIndex by remember(position, lines) {
         derivedStateOf {
             if (lines.isEmpty()) return@derivedStateOf -1

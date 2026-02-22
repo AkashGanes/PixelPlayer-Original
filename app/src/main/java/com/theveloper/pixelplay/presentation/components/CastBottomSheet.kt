@@ -75,7 +75,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -145,20 +145,20 @@ fun CastBottomSheet(
     onDismiss: () -> Unit,
     onExpansionChanged: (Float) -> Unit = {}
 ) {
-    val routes by playerViewModel.castRoutes.collectAsState()
-    val selectedRoute by playerViewModel.selectedRoute.collectAsState()
-    val routeVolume by playerViewModel.routeVolume.collectAsState()
-    val isRefreshing by playerViewModel.isRefreshingRoutes.collectAsState()
-    val isWifiEnabled by playerViewModel.isWifiEnabled.collectAsState()
-    val isWifiRadioOn by playerViewModel.isWifiRadioOn.collectAsState()
-    val wifiName by playerViewModel.wifiName.collectAsState()
-    val isBluetoothEnabled by playerViewModel.isBluetoothEnabled.collectAsState()
-    val bluetoothName by playerViewModel.bluetoothName.collectAsState()
-    val bluetoothAudioDevices by playerViewModel.bluetoothAudioDevices.collectAsState()
-    val isRemotePlaybackActive by playerViewModel.isRemotePlaybackActive.collectAsState()
-    val isCastConnecting by playerViewModel.isCastConnecting.collectAsState()
-    val trackVolume by playerViewModel.trackVolume.collectAsState()
-    val isPlaying = playerViewModel.stablePlayerStateInfrequent.collectAsState().value.isPlaying
+    val routes by playerViewModel.castRoutes.collectAsStateWithLifecycle()
+    val selectedRoute by playerViewModel.selectedRoute.collectAsStateWithLifecycle()
+    val routeVolume by playerViewModel.routeVolume.collectAsStateWithLifecycle()
+    val isRefreshing by playerViewModel.isRefreshingRoutes.collectAsStateWithLifecycle()
+    val isWifiEnabled by playerViewModel.isWifiEnabled.collectAsStateWithLifecycle()
+    val isWifiRadioOn by playerViewModel.isWifiRadioOn.collectAsStateWithLifecycle()
+    val wifiName by playerViewModel.wifiName.collectAsStateWithLifecycle()
+    val isBluetoothEnabled by playerViewModel.isBluetoothEnabled.collectAsStateWithLifecycle()
+    val bluetoothName by playerViewModel.bluetoothName.collectAsStateWithLifecycle()
+    val bluetoothAudioDevices by playerViewModel.bluetoothAudioDevices.collectAsStateWithLifecycle()
+    val isRemotePlaybackActive by playerViewModel.isRemotePlaybackActive.collectAsStateWithLifecycle()
+    val isCastConnecting by playerViewModel.isCastConnecting.collectAsStateWithLifecycle()
+    val trackVolume by playerViewModel.trackVolume.collectAsStateWithLifecycle()
+    val isPlaying = playerViewModel.stablePlayerState.collectAsStateWithLifecycle().value.isPlaying
     val context = LocalContext.current
 
     val requiredPermissions = remember {

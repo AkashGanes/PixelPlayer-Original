@@ -1,7 +1,7 @@
 package com.theveloper.pixelplay.presentation.screens.search.components
 
 import androidx.annotation.OptIn
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -69,13 +69,13 @@ fun GenreCategoriesGrid(
     }
 
     val systemNavBarHeight = getNavigationBarHeight()
-    val customGenreIcons = playerViewModel.customGenreIcons.collectAsState(
-        initial = emptyMap(),
+    val customGenreIcons = playerViewModel.customGenreIcons.collectAsStateWithLifecycle(
+        initialValue = emptyMap(),
         context = kotlin.coroutines.EmptyCoroutineContext
     ).value
 
     // Persistence: Collect from ViewModel
-    val isGridView by playerViewModel.isGenreGridView.collectAsState()
+    val isGridView by playerViewModel.isGenreGridView.collectAsStateWithLifecycle()
 
     LazyVerticalGrid(
         columns = if (isGridView) GridCells.Fixed(2) else GridCells.Fixed(1),

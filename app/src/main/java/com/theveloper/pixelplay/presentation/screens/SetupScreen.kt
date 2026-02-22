@@ -88,7 +88,7 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -142,11 +142,11 @@ fun SetupScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    val uiState by setupViewModel.uiState.collectAsState()
-    val currentPath by setupViewModel.currentPath.collectAsState()
-    val directoryChildren by setupViewModel.currentDirectoryChildren.collectAsState()
-    val availableStorages by setupViewModel.availableStorages.collectAsState()
-    val selectedStorageIndex by setupViewModel.selectedStorageIndex.collectAsState()
+    val uiState by setupViewModel.uiState.collectAsStateWithLifecycle()
+    val currentPath by setupViewModel.currentPath.collectAsStateWithLifecycle()
+    val directoryChildren by setupViewModel.currentDirectoryChildren.collectAsStateWithLifecycle()
+    val availableStorages by setupViewModel.availableStorages.collectAsStateWithLifecycle()
+    val selectedStorageIndex by setupViewModel.selectedStorageIndex.collectAsStateWithLifecycle()
     
     var showCornerRadiusOverlay by remember { mutableStateOf(false) }
 

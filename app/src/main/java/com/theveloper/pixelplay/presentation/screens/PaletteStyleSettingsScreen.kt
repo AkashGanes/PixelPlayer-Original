@@ -41,7 +41,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,10 +70,10 @@ fun PaletteStyleSettingsScreen(
     settingsViewModel: SettingsViewModel = hiltViewModel(),
     onBackClick: () -> Unit
 ) {
-    val uiState by settingsViewModel.uiState.collectAsState()
-    val stablePlayerState by playerViewModel.stablePlayerStateInfrequent.collectAsState()
+    val uiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
+    val stablePlayerState by playerViewModel.stablePlayerState.collectAsStateWithLifecycle()
     val isDarkTheme = LocalPixelPlayDarkTheme.current
-    val albumSchemePair by playerViewModel.currentAlbumArtColorSchemePair.collectAsState()
+    val albumSchemePair by playerViewModel.currentAlbumArtColorSchemePair.collectAsStateWithLifecycle()
 
     val baseScheme = MaterialTheme.colorScheme
     val albumScheme = remember(albumSchemePair, isDarkTheme, baseScheme) {

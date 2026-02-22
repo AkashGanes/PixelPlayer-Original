@@ -14,7 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -160,7 +160,7 @@ internal fun UnifiedPlayerSongInfoLayer(
         val context = LocalContext.current
         val liveSongState by remember(playerViewModel, staticSong.id) {
             playerViewModel.observeSong(staticSong.id).map { it ?: staticSong }
-        }.collectAsState(initial = staticSong)
+        }.collectAsStateWithLifecycle(initialValue = staticSong)
 
         val liveSong = liveSongState
 
@@ -263,19 +263,19 @@ internal fun UnifiedPlayerQueueAndSongInfoHost(
     val inactiveEndOfTrackTimerActiveState = rememberUpdatedState(false)
     val activeTimerValueDisplay: State<String?> =
         if (isQueueTelemetryActive) {
-            playerViewModel.activeTimerValueDisplay.collectAsState()
+            playerViewModel.activeTimerValueDisplay.collectAsStateWithLifecycle()
         } else {
             inactiveTimerValueDisplayState
         }
     val playCount: State<Float> =
         if (isQueueTelemetryActive) {
-            playerViewModel.playCount.collectAsState()
+            playerViewModel.playCount.collectAsStateWithLifecycle()
         } else {
             inactivePlayCountState
         }
     val isEndOfTrackTimerActive: State<Boolean> =
         if (isQueueTelemetryActive) {
-            playerViewModel.isEndOfTrackTimerActive.collectAsState()
+            playerViewModel.isEndOfTrackTimerActive.collectAsStateWithLifecycle()
         } else {
             inactiveEndOfTrackTimerActiveState
         }

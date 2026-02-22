@@ -2,10 +2,15 @@ package com.theveloper.pixelplay.presentation.screens
 
 import com.theveloper.pixelplay.presentation.navigation.navigateSafely
 
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -43,15 +48,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -90,6 +95,8 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.media3.common.util.UnstableApi
@@ -121,34 +128,43 @@ fun SearchScreen(
     navController: NavHostController,
     onSearchBarActiveChange: (Boolean) -> Unit = {}
 ) {
-    var searchQuery by remember { mutableStateOf(playerViewModel.searchQuery) }
-    var active by remember { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf(playerViewModel.searchQuery) }
     val systemNavBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val bottomBarHeightDp = NavBarContentHeight + systemNavBarInset
     var showPlaylistBottomSheet by remember { mutableStateOf(false) }
-    val uiState by playerViewModel.playerUiState.collectAsState()
+    val uiState by playerViewModel.playerUiState.collectAsStateWithLifecycle()
     val currentFilter by remember { derivedStateOf { uiState.selectedSearchFilter } }
-    val searchHistory = uiState.searchHistory
-    val genres by playerViewModel.genres.collectAsState()
-    val stablePlayerState by playerViewModel.stablePlayerStateInfrequent.collectAsState()
-    val favoriteSongIds by playerViewModel.favoriteSongIds.collectAsState()
+    val genres by playerViewModel.genres.collectAsStateWithLifecycle()
+    val stablePlayerState by playerViewModel.stablePlayerState.collectAsStateWithLifecycle()
+    val favoriteSongIds by playerViewModel.favoriteSongIds.collectAsStateWithLifecycle()
     var showSongInfoBottomSheet by remember { mutableStateOf(false) }
     var selectedSongForInfo by remember { mutableStateOf<Song?>(null) }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val searchInputFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
+        onSearchBarActiveChange(false)
+    }
+
+    LaunchedEffect(playerViewModel, keyboardController) {
         playerViewModel.searchNavDoubleTapEvents.collect {
-            active = true
+            // Wait a frame for route transition/layout to settle when the second tap also navigates.
+            delay(40L)
+            searchInputFocusRequester.requestFocus()
+            keyboardController?.show()
         }
     }
 
-    // Perform search whenever searchQuery, active state, or filter changes
-    LaunchedEffect(searchQuery, active, currentFilter) {
-        if (searchQuery.isNotBlank()) {
-            playerViewModel.performSearch(searchQuery)
-        } else if (active) {
+    // Debounce typing and avoid re-running search on focus-only changes.
+    LaunchedEffect(searchQuery, currentFilter) {
+        val normalizedQuery = searchQuery.trim()
+        if (normalizedQuery.isBlank()) {
             playerViewModel.performSearch("")
+            return@LaunchedEffect
         }
+
+        delay(180L)
+        playerViewModel.performSearch(normalizedQuery)
     }
     val searchResults = uiState.searchResults
     val handleSongMoreOptionsClick: (Song) -> Unit = { song ->
@@ -156,12 +172,6 @@ fun SearchScreen(
         playerViewModel.selectSongForInfo(song)
         showSongInfoBottomSheet = true
     }
-
-    val searchbarHorizontalPadding by animateDpAsState(
-        targetValue = if (!active) 24.dp else 0.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh),
-        label = "searchbarHorizontalPadding"
-    )
 
     val searchbarCornerRadius = 28.dp
 
@@ -185,19 +195,8 @@ fun SearchScreen(
 
     val colorScheme = MaterialTheme.colorScheme
 
-    LaunchedEffect(active, keyboardController) {
-        onSearchBarActiveChange(active)
-        if (active) {
-            delay(90L)
-            keyboardController?.show()
-        } else {
-            keyboardController?.hide()
-        }
-    }
-
     DisposableEffect(Unit) {
         onDispose {
-            active = false  // Reset immediately to prevent animation conflicts during navigation
             onSearchBarActiveChange(false)
         }
     }
@@ -219,165 +218,110 @@ fun SearchScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // CORREGIDO: Agregamos un padding mínimo para evitar crashes
-            val safePadding = maxOf(0.dp, searchbarHorizontalPadding)
-
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = safePadding) // Usar padding seguro
+                    .padding(horizontal = 24.dp)
             ) {
+                val searchBarInputFieldColors = SearchBarDefaults.inputFieldColors(
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    cursorColor = MaterialTheme.colorScheme.primary
+                )
+
                 SearchBar(
-                    query = searchQuery,
-                    onQueryChange = {
-                        searchQuery = it
-                        playerViewModel.updateSearchQuery(it)
+                    inputField = {
+                        SearchBarDefaults.InputField(
+                            modifier = Modifier.focusRequester(searchInputFocusRequester),
+                            query = searchQuery,
+                            onQueryChange = {
+                                searchQuery = it
+                                playerViewModel.updateSearchQuery(it)
+                            },
+                            onSearch = { query ->
+                                if (query.isNotBlank()) {
+                                    playerViewModel.onSearchQuerySubmitted(query)
+                                }
+                                keyboardController?.hide()
+                            },
+                            expanded = false,
+                            onExpandedChange = {},
+                            placeholder = {
+                                Text(
+                                    "Search...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Search,
+                                    contentDescription = "Buscar",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotBlank()) {
+                                    IconButton(
+                                        onClick = {
+                                            searchQuery = ""
+                                            playerViewModel.updateSearchQuery("")
+                                        },
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .padding(end = 10.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                                            )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Close,
+                                            contentDescription = "Limpiar",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            },
+                            colors = searchBarInputFieldColors
+                        )
                     },
-                    onSearch = {
-                        if (searchQuery.isNotBlank()) {
-                            playerViewModel.onSearchQuerySubmitted(searchQuery)
-                        }
-                        active = false
-                    },
-                    active = active,
-                    onActiveChange = {
-                        if (!it) {
-                            if (searchQuery.isNotBlank()) {
-                                playerViewModel.onSearchQuerySubmitted(searchQuery)
-                            }
-                        }
-                        active = it
-                    },
+                    expanded = false,
+                    onExpandedChange = {},
                     modifier = Modifier
                         .fillMaxWidth()
-                        .animateContentSize()
                         .clip(RoundedCornerShape(searchbarCornerRadius)),
-                    placeholder = {
-                        Text(
-                            "Search...",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Rounded.Search,
-                            contentDescription = "Buscar",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotBlank()) {
-                            IconButton(
-                                onClick = { searchQuery = "" },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .padding(end = 10.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
-                                    )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Close,
-                                    contentDescription = "Limpiar",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    },
                     colors = SearchBarDefaults.colors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
                         dividerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                        inputFieldColors = TextFieldDefaults.colors(
-                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            cursorColor = MaterialTheme.colorScheme.primary
-                        )
+                        inputFieldColors = searchBarInputFieldColors
                     ),
-                    content = {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                        ) {
-                            // Filter chips
-                            FlowRow(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                //verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                SearchFilterChip(SearchFilterType.ALL, currentFilter, playerViewModel)
-                                SearchFilterChip(SearchFilterType.SONGS, currentFilter, playerViewModel)
-                                SearchFilterChip(SearchFilterType.ALBUMS, currentFilter, playerViewModel)
-                                SearchFilterChip(SearchFilterType.ARTISTS, currentFilter, playerViewModel)
-                                SearchFilterChip(SearchFilterType.PLAYLISTS, currentFilter, playerViewModel)
-                            }
-
-                            if (searchQuery.isBlank() && active && searchHistory.isNotEmpty()) {
-                                val rememberedOnHistoryClick: (String) -> Unit = remember(playerViewModel) {
-                                    { query -> searchQuery = query }
-                                }
-                                val rememberedOnHistoryDelete: (String) -> Unit = remember(playerViewModel) {
-                                    { query -> playerViewModel.deleteSearchHistoryItem(query) }
-                                }
-                                val rememberedOnClearAllHistory: () -> Unit = remember(playerViewModel) {
-                                    { playerViewModel.clearSearchHistory() }
-                                }
-
-                                SearchHistoryList(
-                                    historyItems = searchHistory,
-                                    onHistoryClick = rememberedOnHistoryClick,
-                                    onHistoryDelete = rememberedOnHistoryDelete,
-                                    onClearAllHistory = rememberedOnClearAllHistory
-                                )
-                            } else if (searchQuery.isNotBlank() && searchResults.isEmpty()) {
-                                EmptySearchResults(
-                                    searchQuery = searchQuery,
-                                    colorScheme = colorScheme
-                                )
-                            } else if (searchResults.isNotEmpty()) {
-                                val rememberedOnItemSelected = remember(searchQuery, playerViewModel) {
-                                    {
-                                        if (searchQuery.isNotBlank()) {
-                                            playerViewModel.onSearchQuerySubmitted(searchQuery)
-                                        }
-                                        active = false
-                                    }
-                                }
-                                SearchResultsList(
-                                    results = searchResults,
-                                    playerViewModel = playerViewModel,
-                                    onItemSelected = rememberedOnItemSelected,
-                                    currentPlayingSongId = stablePlayerState.currentSong?.id,
-                                    isPlaying = stablePlayerState.isPlaying,
-                                    onSongMoreOptionsClick = handleSongMoreOptionsClick,
-                                    navController = navController
-                                )
-                            } else if (searchQuery.isBlank() && active && searchHistory.isEmpty()) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("No recent searches", style = MaterialTheme.typography.bodyLarge)
-                                }
-                            }
-                        }
-                    }
+                    content = {}
                 )
             }
 
-            // Content to show when SearchBar is not active
-            if (!active) {
-                if (searchQuery.isBlank()) {
-                    Box {
+            val showGenreBrowse by remember(searchQuery) { derivedStateOf { searchQuery.isBlank() } }
+            AnimatedContent(
+                targetState = showGenreBrowse,
+                transitionSpec = {
+                    val switchingToGenre = targetState
+                    val enter = fadeIn(animationSpec = tween(durationMillis = 320, delayMillis = 70)) +
+                        slideInVertically(animationSpec = tween(durationMillis = 320)) { fullHeight ->
+                            if (switchingToGenre) -fullHeight / 10 else fullHeight / 10
+                        }
+                    val exit = fadeOut(animationSpec = tween(durationMillis = 220)) +
+                        slideOutVertically(animationSpec = tween(durationMillis = 220)) { fullHeight ->
+                            if (switchingToGenre) fullHeight / 12 else -fullHeight / 12
+                        }
+                    (enter togetherWith exit).using(SizeTransform(clip = false))
+                },
+                label = "search_mode_transition"
+            ) { isGenreMode ->
+                if (isGenreMode) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                         GenreCategoriesGrid(
                             genres = genres,
                             onGenreClick = { genre ->
@@ -405,12 +349,14 @@ fun SearchScreen(
                                         )
                                     )
                                 )
-                        ) {
-
-                        }
+                        )
                     }
                 } else {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp)
+                    ) {
                         FlowRow(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -424,15 +370,32 @@ fun SearchScreen(
                             SearchFilterChip(SearchFilterType.ARTISTS, currentFilter, playerViewModel)
                             SearchFilterChip(SearchFilterType.PLAYLISTS, currentFilter, playerViewModel)
                         }
-                        SearchResultsList(
-                            results = searchResults,
-                            playerViewModel = playerViewModel,
-                            onItemSelected = { },
-                            currentPlayingSongId = stablePlayerState.currentSong?.id,
-                            isPlaying = stablePlayerState.isPlaying,
-                            onSongMoreOptionsClick = handleSongMoreOptionsClick,
-                            navController = navController
-                        )
+                        Crossfade(
+                            targetState = searchResults.isEmpty(),
+                            animationSpec = tween(durationMillis = 190),
+                            label = "search_results_fade"
+                        ) { isEmpty ->
+                            if (isEmpty) {
+                                EmptySearchResults(
+                                    searchQuery = searchQuery,
+                                    colorScheme = colorScheme
+                                )
+                            } else {
+                                SearchResultsList(
+                                    results = searchResults,
+                                    playerViewModel = playerViewModel,
+                                    onItemSelected = {
+                                        if (searchQuery.isNotBlank()) {
+                                            playerViewModel.onSearchQuerySubmitted(searchQuery)
+                                        }
+                                    },
+                                    currentPlayingSongId = stablePlayerState.currentSong?.id,
+                                    isPlaying = stablePlayerState.isPlaying,
+                                    onSongMoreOptionsClick = handleSongMoreOptionsClick,
+                                    navController = navController
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -502,7 +465,7 @@ fun SearchScreen(
                 },
             )
             if (showPlaylistBottomSheet) {
-                val playlistUiState by playlistViewModel.uiState.collectAsState()
+                val playlistUiState by playlistViewModel.uiState.collectAsStateWithLifecycle()
 
                 PlaylistBottomSheet(
                     playlistUiState = playlistUiState,
@@ -660,7 +623,7 @@ fun SearchResultsList(
     navController: NavHostController
 ) {
     val localDensity = LocalDensity.current
-    val playerStableState by playerViewModel.stablePlayerStateInfrequent.collectAsState()
+    val playerStableState by playerViewModel.stablePlayerState.collectAsStateWithLifecycle()
 
     if (results.isEmpty()) {
         Box(
@@ -756,9 +719,10 @@ fun SearchResultsList(
                                         onItemSelected()
                                     }
                                 }
-                                val onOpenClick = remember (
+                                val onOpenClick = remember(
                                     item.album,
-                                    playerViewModel, onItemSelected ) {
+                                    playerViewModel, onItemSelected
+                                ) {
                                     {
                                         navController.navigateSafely(Screen.AlbumDetail.createRoute(item.album.id))
                                         onItemSelected()
@@ -780,9 +744,10 @@ fun SearchResultsList(
                                         onItemSelected()
                                     }
                                 }
-                                val onOpenClick = remember (
+                                val onOpenClick = remember(
                                     item.artist,
-                                    playerViewModel, onItemSelected ) {
+                                    playerViewModel, onItemSelected
+                                ) {
                                     {
                                         navController.navigateSafely(Screen.ArtistDetail.createRoute(item.artist.id))
                                         onItemSelected()
@@ -798,8 +763,10 @@ fun SearchResultsList(
                             is SearchResultItem.PlaylistItem -> {
                                 var songsInPlaylist by remember { mutableStateOf<List<Song>>(emptyList()) }
                                 var fetchSongs by remember { mutableStateOf(false) }
-                                LaunchedEffect(fetchSongs) {
-                                    songsInPlaylist = playerViewModel.getSongs( item.playlist.songIds)
+                                LaunchedEffect(fetchSongs, item.playlist.id) {
+                                    if (!fetchSongs) return@LaunchedEffect
+                                    songsInPlaylist = playerViewModel.getSongs(item.playlist.songIds)
+                                    fetchSongs = false
                                 }
                                 val onPlayClick = remember(item.playlist, playerViewModel, onItemSelected) {
                                     {
@@ -816,9 +783,10 @@ fun SearchResultsList(
                                         onItemSelected()
                                     }
                                 }
-                                val onOpenClick = remember (
+                                val onOpenClick = remember(
                                     item.playlist,
-                                    playerViewModel, onItemSelected ) {
+                                    playerViewModel, onItemSelected
+                                ) {
                                     {
                                         navController.navigateSafely(Screen.PlaylistDetail.createRoute(item.playlist.id))
                                         onItemSelected()

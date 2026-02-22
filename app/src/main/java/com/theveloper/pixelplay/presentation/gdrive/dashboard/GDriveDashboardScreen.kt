@@ -37,6 +37,7 @@ import com.theveloper.pixelplay.data.database.GDriveFolderEntity
 import com.theveloper.pixelplay.presentation.gdrive.auth.GDriveLoginActivity
 import com.theveloper.pixelplay.ui.theme.GoogleSansRounded
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -45,9 +46,9 @@ fun GDriveDashboardScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val folders by viewModel.folders.collectAsState()
-    val isSyncing by viewModel.isSyncing.collectAsState()
-    val syncMessage by viewModel.syncMessage.collectAsState()
+    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val syncMessage by viewModel.syncMessage.collectAsStateWithLifecycle()
 
     val cardShape = AbsoluteSmoothCornerShape(
         cornerRadiusTR = 20.dp, cornerRadiusTL = 20.dp,

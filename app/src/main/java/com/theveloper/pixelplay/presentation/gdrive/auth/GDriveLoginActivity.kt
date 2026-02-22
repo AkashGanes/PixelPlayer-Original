@@ -43,6 +43,7 @@ import com.theveloper.pixelplay.ui.theme.PixelPlayTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @AndroidEntryPoint
 class GDriveLoginActivity : ComponentActivity() {
@@ -64,7 +65,7 @@ fun GDriveLoginScreen(
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
-    val loginState by viewModel.state.collectAsState()
+    val loginState by viewModel.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     val cardShape = AbsoluteSmoothCornerShape(

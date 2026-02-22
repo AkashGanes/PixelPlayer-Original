@@ -38,7 +38,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -68,7 +68,7 @@ import kotlinx.coroutines.launch
 fun MashupScreen(
     mashupViewModel: MashupViewModel = hiltViewModel()
 ) {
-    val mashupUiState by mashupViewModel.uiState.collectAsState()
+    val mashupUiState by mashupViewModel.uiState.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()

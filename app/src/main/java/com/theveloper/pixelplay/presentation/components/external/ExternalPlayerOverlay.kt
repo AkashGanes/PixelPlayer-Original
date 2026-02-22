@@ -38,7 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,11 +69,11 @@ fun ExternalPlayerOverlay(
     onDismiss: () -> Unit,
     onOpenFullPlayer: () -> Unit
 ) {
-    val stablePlayerState by playerViewModel.stablePlayerStateInfrequent.collectAsState()
-    val playbackPosition by playerViewModel.currentPlaybackPosition.collectAsState()
-    val remotePosition by playerViewModel.remotePosition.collectAsState()
-    val isRemotePlaybackActive by playerViewModel.isRemotePlaybackActive.collectAsState()
-    val navBarCornerRadius by playerViewModel.navBarCornerRadius.collectAsState()
+    val stablePlayerState by playerViewModel.stablePlayerState.collectAsStateWithLifecycle()
+    val playbackPosition by playerViewModel.currentPlaybackPosition.collectAsStateWithLifecycle()
+    val remotePosition by playerViewModel.remotePosition.collectAsStateWithLifecycle()
+    val isRemotePlaybackActive by playerViewModel.isRemotePlaybackActive.collectAsStateWithLifecycle()
+    val navBarCornerRadius by playerViewModel.navBarCornerRadius.collectAsStateWithLifecycle()
     val currentSong = stablePlayerState.currentSong
 
     var sheetVisible by remember { mutableStateOf(true) }

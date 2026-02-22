@@ -88,7 +88,7 @@ import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -230,9 +230,9 @@ fun QueueBottomSheet(
     var showClearQueueDialog by remember { mutableStateOf(false) }
     var isFabExpanded by rememberSaveable { mutableStateOf(false) }
 
-    val infrequentPlayerState by viewModel.stablePlayerStateInfrequent.collectAsState()
+    val infrequentPlayerState by viewModel.stablePlayerState.collectAsStateWithLifecycle()
 
-    val albumColorSchemePair by viewModel.currentAlbumArtColorSchemePair.collectAsState()
+    val albumColorSchemePair by viewModel.currentAlbumArtColorSchemePair.collectAsStateWithLifecycle()
     val isDark = isSystemInDarkTheme()
     val albumColorScheme = remember(albumColorSchemePair, isDark) {
         albumColorSchemePair?.let { pair -> if (isDark) pair.dark else pair.light }
@@ -245,7 +245,7 @@ fun QueueBottomSheet(
     }
 
     // Read show queue history preference
-    val settingsState by settingsViewModel.uiState.collectAsState()
+    val settingsState by settingsViewModel.uiState.collectAsStateWithLifecycle()
     val showQueueHistory = settingsState.showQueueHistory
 
     // Offset to convert display indices to queue indices when history is hidden.
@@ -1011,7 +1011,7 @@ fun QueueBottomSheet(
             }
 
             // Undo bar for queue item removal
-            val playerUiState by viewModel.playerUiState.collectAsState()
+            val playerUiState by viewModel.playerUiState.collectAsStateWithLifecycle()
             AnimatedVisibility(
                 visible = playerUiState.showQueueItemUndoBar,
                 modifier = Modifier

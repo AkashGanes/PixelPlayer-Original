@@ -36,6 +36,7 @@ import com.theveloper.pixelplay.ui.theme.GoogleSansRounded
 import com.theveloper.pixelplay.ui.theme.PixelPlayTheme
 import dagger.hilt.android.AndroidEntryPoint
 import org.json.JSONObject
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * WebView-based login for Netease Cloud Music.
@@ -75,7 +76,7 @@ fun NeteaseWebLoginScreen(
 ) {
     val context = LocalContext.current
     var webView by remember { mutableStateOf<WebView?>(null) }
-    val loginState by viewModel.state.collectAsState()
+    val loginState by viewModel.state.collectAsStateWithLifecycle()
     val titleStyle = rememberNeteaseLoginTitleStyle()
 
     val snackbarHostState = remember { SnackbarHostState() }

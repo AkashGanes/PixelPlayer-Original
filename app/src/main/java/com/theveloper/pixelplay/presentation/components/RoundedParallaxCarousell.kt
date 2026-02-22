@@ -49,7 +49,6 @@ import kotlin.math.*
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Path
 import com.theveloper.pixelplay.data.preferences.CarouselStyle
-import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /* ================================================================================================
@@ -280,10 +279,11 @@ private fun RoundedCarousel(
         val carouselItemInfo = remember { CarouselItemDrawInfoImpl() }
         val scope = remember { CarouselItemScopeImpl(itemInfo = carouselItemInfo) }
 
-        // En la cabecera de tu RoundedParallaxCarousel/Carousel agrega itemCornerRadiusPx o pásalo como Dp y conviértelo aquí.
-        val cornerPx = with(LocalDensity.current) { itemCornerRadius.toPx() }
+        val cachedShape = remember(itemCornerRadius) {
+            RoundedCornerShape(itemCornerRadius)
+        }
 
-        val clipShape = remember(cornerPx) {
+        val clipShape = remember(cachedShape) {
             object : Shape {
                 override fun createOutline(
                     size: Size,
@@ -297,16 +297,7 @@ private fun RoundedCarousel(
 
                     // 2) Creamos un outline redondeado del tamaño del rect ya intersectado
                     val localSize = Size(rect.width, rect.height)
-                    val baseOutline = AbsoluteSmoothCornerShape(
-                        cornerRadiusTL = cornerPx.dp,
-                        smoothnessAsPercentTL = 60,
-                        cornerRadiusTR = cornerPx.dp,
-                        smoothnessAsPercentTR = 60,
-                        cornerRadiusBR = cornerPx.dp,
-                        smoothnessAsPercentBL = 60,
-                        cornerRadiusBL = cornerPx.dp,
-                        smoothnessAsPercentBR = 60
-                    ).createOutline(localSize, layoutDirection, density)
+                    val baseOutline = cachedShape.createOutline(localSize, layoutDirection, density)
 
                     // 3) Lo pasamos a Path y lo trasladamos a (left,top) del maskRect
                     val path = Path().apply {
@@ -1592,4 +1583,3 @@ private class KeylineListScopeImpl : KeylineListScope {
         )
     }
 }
-

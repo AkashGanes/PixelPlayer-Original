@@ -24,7 +24,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         GDriveSongEntity::class,
         GDriveFolderEntity::class
     ],
-    version = 24, // Incremented for schema consolidation and cleanup
+    version = 25, // Incremented for schema consolidation and query performance indexes
 
     exportSchema = false
 )
@@ -757,6 +757,19 @@ abstract class PixelPlayDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `album_art_themes` ($columnsSql, PRIMARY KEY(`albumArtUriString`))")
 
                 db.execSQL("PRAGMA foreign_keys=ON")
+            }
+        }
+
+        /**
+         * Add missing indexes for frequently filtered and sorted queries.
+         */
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_songs_content_uri_string ON songs(content_uri_string)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_songs_date_added ON songs(date_added)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_songs_duration ON songs(duration)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_favorites_timestamp ON favorites(timestamp)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_song_engagements_play_count ON song_engagements(play_count)")
             }
         }
     }

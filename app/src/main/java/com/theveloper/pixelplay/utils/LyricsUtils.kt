@@ -12,7 +12,7 @@ import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -303,7 +303,7 @@ fun BubblesLine(
     nextTime: Int,
     modifier: Modifier = Modifier,
 ) {
-    val position by positionFlow.collectAsState(initial = 0L)
+    val position by positionFlow.collectAsStateWithLifecycle(initialValue = 0L)
     val isCurrent = position in time until nextTime
     val transition = rememberInfiniteTransition(label = "bubbles_transition")
 

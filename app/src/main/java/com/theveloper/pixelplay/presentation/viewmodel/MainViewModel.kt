@@ -22,11 +22,12 @@ class MainViewModel @Inject constructor(
     userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
-    val isSetupComplete: StateFlow<Boolean> = userPreferencesRepository.initialSetupDoneFlow
+    val isSetupComplete: StateFlow<Boolean?> = userPreferencesRepository.initialSetupDoneFlow
+        .map { it as Boolean? }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
+            initialValue = null
         )
 
     val hasCompletedInitialSync: StateFlow<Boolean> = userPreferencesRepository.lastSyncTimestampFlow
@@ -80,7 +81,7 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             // For fresh installs after setup, SetupViewModel.setSetupComplete() triggers sync
             // For returning users (setup already complete), we trigger sync here
-            if (isSetupComplete.value) {
+            if (isSetupComplete.value == true) {
                 syncManager.sync()
             }
         }

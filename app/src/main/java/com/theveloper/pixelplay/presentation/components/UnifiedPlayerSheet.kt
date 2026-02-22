@@ -49,7 +49,7 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -150,14 +150,14 @@ fun UnifiedPlayerSheet(
         }
     }
 
-    val infrequentPlayerStateReference = playerViewModel.stablePlayerStateInfrequent.collectAsState()
+    val infrequentPlayerStateReference = playerViewModel.stablePlayerState.collectAsStateWithLifecycle()
     val infrequentPlayerState = infrequentPlayerStateReference.value
 
-    val currentPositionState = playerViewModel.currentPlaybackPosition.collectAsState()
+    val currentPositionState = playerViewModel.currentPlaybackPosition.collectAsStateWithLifecycle()
 
-    val remotePositionState = playerViewModel.remotePosition.collectAsState()
+    val remotePositionState = playerViewModel.remotePosition.collectAsStateWithLifecycle()
     // We observe isRemotePlaybackActive directly as switching modes is a major event
-    val isRemotePlaybackActive by playerViewModel.isRemotePlaybackActive.collectAsState()
+    val isRemotePlaybackActive by playerViewModel.isRemotePlaybackActive.collectAsStateWithLifecycle()
     
     // Position Provider: Reads state inside the lambda to prevent recomposition of UnifiedPlayerSheet
     val positionToDisplayProvider = remember(isRemotePlaybackActive) {
@@ -167,7 +167,7 @@ fun UnifiedPlayerSheet(
         }
     }
     
-    val isFavorite by playerViewModel.isCurrentSongFavorite.collectAsState()
+    val isFavorite by playerViewModel.isCurrentSongFavorite.collectAsStateWithLifecycle()
     val playerUiSheetSlice by remember {
         playerViewModel.playerUiState
             .map { state ->
@@ -178,24 +178,24 @@ fun UnifiedPlayerSheet(
                 )
             }
             .distinctUntilChanged()
-    }.collectAsState(initial = PlayerUiSheetSlice())
+    }.collectAsStateWithLifecycle(initialValue = PlayerUiSheetSlice())
 
     val currentPlaybackQueue = playerUiSheetSlice.currentPlaybackQueue
     val currentQueueSourceName = playerUiSheetSlice.currentQueueSourceName
     val preparingSongId = playerUiSheetSlice.preparingSongId
 
-    val currentSheetContentState by playerViewModel.sheetState.collectAsState()
-    val predictiveBackCollapseProgress by playerViewModel.predictiveBackCollapseFraction.collectAsState()
-    val predictiveBackSwipeEdge by playerViewModel.predictiveBackSwipeEdge.collectAsState()
+    val currentSheetContentState by playerViewModel.sheetState.collectAsStateWithLifecycle()
+    val predictiveBackCollapseProgress by playerViewModel.predictiveBackCollapseFraction.collectAsStateWithLifecycle()
+    val predictiveBackSwipeEdge by playerViewModel.predictiveBackSwipeEdge.collectAsStateWithLifecycle()
     val prewarmFullPlayer = rememberPrewarmFullPlayer(infrequentPlayerState.currentSong?.id)
 
-    val navBarCornerRadius by playerViewModel.navBarCornerRadius.collectAsState()
-    val navBarStyle by playerViewModel.navBarStyle.collectAsState()
-    val carouselStyle by playerViewModel.carouselStyle.collectAsState()
-    val fullPlayerLoadingTweaks by playerViewModel.fullPlayerLoadingTweaks.collectAsState()
-    val tapBackgroundClosesPlayer by playerViewModel.tapBackgroundClosesPlayer.collectAsState()
-    val useSmoothCorners by playerViewModel.useSmoothCorners.collectAsState()
-    val playerThemePreference by playerViewModel.playerThemePreference.collectAsState()
+    val navBarCornerRadius by playerViewModel.navBarCornerRadius.collectAsStateWithLifecycle()
+    val navBarStyle by playerViewModel.navBarStyle.collectAsStateWithLifecycle()
+    val carouselStyle by playerViewModel.carouselStyle.collectAsStateWithLifecycle()
+    val fullPlayerLoadingTweaks by playerViewModel.fullPlayerLoadingTweaks.collectAsStateWithLifecycle()
+    val tapBackgroundClosesPlayer by playerViewModel.tapBackgroundClosesPlayer.collectAsStateWithLifecycle()
+    val useSmoothCorners by playerViewModel.useSmoothCorners.collectAsStateWithLifecycle()
+    val playerThemePreference by playerViewModel.playerThemePreference.collectAsStateWithLifecycle()
 
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
@@ -220,7 +220,7 @@ fun UnifiedPlayerSheet(
     ) { with(density) { configuration.screenHeightDp.dp.toPx() } }
     val miniPlayerContentHeightPx = remember { with(density) { MiniPlayerHeight.toPx() } }
 
-    val isCastConnecting by playerViewModel.isCastConnecting.collectAsState()
+    val isCastConnecting by playerViewModel.isCastConnecting.collectAsStateWithLifecycle()
 
     val showPlayerContentArea by remember(infrequentPlayerState.currentSong, isCastConnecting) {
         derivedStateOf { infrequentPlayerState.currentSong != null || isCastConnecting }
@@ -459,8 +459,8 @@ fun UnifiedPlayerSheet(
         }
     }
 
-    val activePlayerSchemePair by playerViewModel.activePlayerColorSchemePair.collectAsState()
-    val themedAlbumArtUri by playerViewModel.currentThemedAlbumArtUri.collectAsState()
+    val activePlayerSchemePair by playerViewModel.activePlayerColorSchemePair.collectAsStateWithLifecycle()
+    val themedAlbumArtUri by playerViewModel.currentThemedAlbumArtUri.collectAsStateWithLifecycle()
     val isDarkTheme = LocalPixelPlayDarkTheme.current
     val currentSong = infrequentPlayerState.currentSong
     val sheetThemeState = rememberSheetThemeState(

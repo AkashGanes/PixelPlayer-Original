@@ -3,6 +3,7 @@
 package com.theveloper.pixelplay.presentation.screens
 
 import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -105,12 +106,12 @@ fun ArtistDetailScreen(
     viewModel: ArtistDetailViewModel = hiltViewModel(),
     playlistViewModel: PlaylistViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val stablePlayerState by playerViewModel.stablePlayerStateInfrequent.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val stablePlayerState by playerViewModel.stablePlayerState.collectAsStateWithLifecycle()
     val lazyListState = rememberLazyListState()
-    val favoriteIds by playerViewModel.favoriteSongIds.collectAsState()
+    val favoriteIds by playerViewModel.favoriteSongIds.collectAsStateWithLifecycle()
     var showSongInfoBottomSheet by remember { mutableStateOf(false) }
-    val selectedSongForInfo by playerViewModel.selectedSongForInfo.collectAsState()
+    val selectedSongForInfo by playerViewModel.selectedSongForInfo.collectAsStateWithLifecycle()
     val systemNavBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val bottomBarHeightDp = NavBarContentHeight + systemNavBarInset
     var showPlaylistBottomSheet by remember { mutableStateOf(false) }
@@ -122,7 +123,7 @@ fun ArtistDetailScreen(
     // --- Dynamic color palette from pre-warmed ViewModel state ---
     // artistColorScheme is set by the ViewModel BEFORE isLoading becomes false,
     // so the very first composition already has the correct palette — no flash.
-    val artistColorSchemePair by viewModel.artistColorScheme.collectAsState()
+    val artistColorSchemePair by viewModel.artistColorScheme.collectAsStateWithLifecycle()
     val artistColorScheme = remember(artistColorSchemePair, isDarkTheme) {
         artistColorSchemePair?.let { pair -> if (isDarkTheme) pair.dark else pair.light }
             ?: baseColorScheme
@@ -432,7 +433,7 @@ fun ArtistDetailScreen(
                 removeFromListTrigger = removeFromListTrigger
             )
             if (showPlaylistBottomSheet) {
-                val playlistUiState by playlistViewModel.uiState.collectAsState()
+                val playlistUiState by playlistViewModel.uiState.collectAsStateWithLifecycle()
 
                 PlaylistBottomSheet(
                     playlistUiState = playlistUiState,

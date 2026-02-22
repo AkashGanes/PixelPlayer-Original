@@ -55,7 +55,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,10 +98,10 @@ fun TelegramDashboardScreen(
     onBack: () -> Unit,
     viewModel: TelegramDashboardViewModel = hiltViewModel()
 ) {
-    val channels by viewModel.channels.collectAsState()
-    val isRefreshingId by viewModel.isRefreshing.collectAsState()
-    val statusMessage by viewModel.statusMessage.collectAsState()
-    val isOnline by viewModel.isOnline.collectAsState()
+    val channels by viewModel.channels.collectAsStateWithLifecycle()
+    val isRefreshingId by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
+    val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
     var selectedChannelForActions by remember { mutableStateOf<TelegramChannelEntity?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -512,7 +512,7 @@ private fun ChannelActionsBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+//            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
                 text = channel.title,
@@ -523,7 +523,7 @@ private fun ChannelActionsBottomSheet(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = usernameLabel ?: "Public Telegram channel",
                 style = MaterialTheme.typography.bodyMedium,
@@ -532,7 +532,7 @@ private fun ChannelActionsBottomSheet(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-
+            Spacer(modifier = Modifier.height(14.dp))
             ChannelActionCard(
                 title = if (isSyncing) "Syncing channel" else "Sync now",
                 subtitle = if (isSyncing) {
@@ -557,7 +557,7 @@ private fun ChannelActionsBottomSheet(
                     null
                 }
             )
-
+            Spacer(modifier = Modifier.height(14.dp))
             ChannelActionCard(
                 title = "Remove channel",
                 subtitle = "Stop syncing and remove cached songs",

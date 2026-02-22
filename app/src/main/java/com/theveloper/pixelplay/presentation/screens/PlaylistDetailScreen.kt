@@ -73,7 +73,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -143,8 +143,8 @@ fun PlaylistDetailScreen(
     playlistViewModel: PlaylistViewModel = hiltViewModel(),
     navController: NavController
 ) {
-    val uiState by playlistViewModel.uiState.collectAsState()
-    val playerStableState by playerViewModel.stablePlayerStateInfrequent.collectAsState()
+    val uiState by playlistViewModel.uiState.collectAsStateWithLifecycle()
+    val playerStableState by playerViewModel.stablePlayerState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val currentPlaylist = uiState.currentPlaylistDetails
     val isFolderPlaylist = currentPlaylist?.id?.startsWith(FOLDER_PLAYLIST_PREFIX) == true
@@ -173,8 +173,8 @@ fun PlaylistDetailScreen(
         }
     }
 
-    val selectedSongForInfo by playerViewModel.selectedSongForInfo.collectAsState()
-    val favoriteIds by playerViewModel.favoriteSongIds.collectAsState() // Reintroducir favoriteIds aquí
+    val selectedSongForInfo by playerViewModel.selectedSongForInfo.collectAsStateWithLifecycle()
+    val favoriteIds by playerViewModel.favoriteSongIds.collectAsStateWithLifecycle() // Reintroducir favoriteIds aquí
     val stableOnMoreOptionsClick: (Song) -> Unit = remember {
         { song ->
             playerViewModel.selectSongForInfo(song)
@@ -873,7 +873,7 @@ fun PlaylistDetailScreen(
                 }
             )
             if (showPlaylistBottomSheet) {
-                val playlistUiState by playlistViewModel.uiState.collectAsState()
+                val playlistUiState by playlistViewModel.uiState.collectAsStateWithLifecycle()
 
                 PlaylistBottomSheet(
                     playlistUiState = playlistUiState,
@@ -889,7 +889,7 @@ fun PlaylistDetailScreen(
         }
     }
 
-    val isSortSheetVisible by playerViewModel.isSortingSheetVisible.collectAsState()
+    val isSortSheetVisible by playerViewModel.isSortingSheetVisible.collectAsStateWithLifecycle()
 
     if (isSortSheetVisible) {
         // Check if playlist is in Manual mode (which corresponds to Default Order)
@@ -898,7 +898,7 @@ fun PlaylistDetailScreen(
         // If in Manual mode, show SongDefaultOrder as selected; otherwise use the stored sort option
         val currentSortOption = if (isManualMode) {
             SortOption.SongDefaultOrder
-        } else if ((isFolderPlaylist || currentPlaylist != null) && rawOption != null) {
+        } else if (currentPlaylist != null) {
             rawOption
         } else {
             SortOption.SongTitleAZ

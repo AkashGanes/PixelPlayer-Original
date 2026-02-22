@@ -14,7 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,9 +42,9 @@ fun ScreenWrapper(
     content: @Composable () -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    val playerSheetState by playerViewModel.sheetState.collectAsState()
-    val isQueueSheetVisible by playerViewModel.isQueueSheetVisible.collectAsState()
-    val isCastSheetVisible by playerViewModel.isCastSheetVisible.collectAsState()
+    val playerSheetState by playerViewModel.sheetState.collectAsStateWithLifecycle()
+    val isQueueSheetVisible by playerViewModel.isQueueSheetVisible.collectAsStateWithLifecycle()
+    val isCastSheetVisible by playerViewModel.isCastSheetVisible.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     
     // Lifecycle State
@@ -70,7 +70,7 @@ fun ScreenWrapper(
 
     // Stack Check (for Dimming)
     // We compare indices to determine if we are strictly BEHIND the active screen.
-    val backStack by navController.currentBackStack.collectAsState()
+    val backStack by navController.currentBackStack.collectAsStateWithLifecycle()
     val myEntry = lifecycleOwner as? androidx.navigation.NavBackStackEntry
     val myIndex = backStack.indexOfFirst { it.id == myEntry?.id }
     val topIndex = backStack.lastIndex
