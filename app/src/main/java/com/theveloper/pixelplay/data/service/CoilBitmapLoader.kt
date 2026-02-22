@@ -9,6 +9,7 @@ import androidx.media3.common.util.BitmapLoader
 import androidx.media3.common.util.UnstableApi
 import coil.imageLoader
 import coil.request.ImageRequest
+import coil.size.Size
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +35,7 @@ class CoilBitmapLoader(private val context: Context) : BitmapLoader {
             try {
                 val request = ImageRequest.Builder(context)
                     .data(data)
+                    .size(Size(384, 384)) // Essential to keep under Android's 1MB Binder IPC limit (384x384 = ~590KB)
                     .allowHardware(false) // Bitmap must not be hardware for MediaSession
                     .build()
                 

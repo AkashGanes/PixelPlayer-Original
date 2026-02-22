@@ -439,7 +439,6 @@ abstract class PixelPlayDatabase : RoomDatabase() {
         }
 
         /**
-        /**
          * Add custom_image_uri column to artists table.
          * Allows users to associate a custom image with each artist.
          * Nullable with DEFAULT NULL so this migration is safe and additive.
@@ -758,8 +757,6 @@ abstract class PixelPlayDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `album_art_themes` ($columnsSql, PRIMARY KEY(`albumArtUriString`))")
 
                 db.execSQL("PRAGMA foreign_keys=ON")
-            }
-        }
             }
         }
     }
