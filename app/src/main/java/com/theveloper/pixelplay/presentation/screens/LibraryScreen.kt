@@ -1626,7 +1626,7 @@ fun LibraryScreen(
                 Toast.makeText(context, "Set your Gemini API key first", Toast.LENGTH_SHORT).show()
             }
         },
-        onCreate = { name, imageUri, color, icon, songIds, cropScale, cropPanX, cropPanY, shapeType, d1, d2, d3, d4 ->
+        onCreate = { name, imageUri, color, icon, songIds, cropScale, cropPanX, cropPanY, shapeType, d1, d2, d3, d4, smartRuleKey ->
             playlistViewModel.createPlaylist(
                 name = name,
                 coverImageUri = imageUri,
@@ -1642,7 +1642,8 @@ fun LibraryScreen(
                 coverShapeDetail1 = d1,
                 coverShapeDetail2 = d2,
                 coverShapeDetail3 = d3,
-                coverShapeDetail4 = d4
+                coverShapeDetail4 = d4,
+                smartRuleKey = smartRuleKey
             )
         }
     )

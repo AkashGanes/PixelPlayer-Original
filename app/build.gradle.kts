@@ -294,14 +294,12 @@ dependencies {
     implementation(libs.accompanist.permissions)
 
     //Audio editing
-    // Spleeter para separación de audio y Amplituda para procesar formas de onda
+    // Spleeter para separación de audio
     //implementation(libs.tensorflow.lite)
     //implementation(libs.tensorflow.lite.support)
     ///implementation(libs.tensorflow.lite.select.tf.ops)
-    implementation(libs.amplituda)
 
     // Compose-audiowaveform para la UI
-    implementation(libs.compose.audiowaveform)
 
     // Media3 Transformer (ya debería estar, pero asegúrate)
     implementation(libs.androidx.media3.transformer)

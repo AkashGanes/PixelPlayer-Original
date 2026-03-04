@@ -11,6 +11,7 @@ import androidx.paging.map
 import com.theveloper.pixelplay.data.database.MusicDao
 import com.theveloper.pixelplay.data.database.FavoritesDao
 import com.theveloper.pixelplay.data.database.toSong
+import com.theveloper.pixelplay.data.model.ArtistRef
 import com.theveloper.pixelplay.data.model.Song
 import com.theveloper.pixelplay.data.observer.MediaStoreObserver
 import com.theveloper.pixelplay.data.preferences.UserPreferencesRepository
@@ -20,6 +21,7 @@ import com.theveloper.pixelplay.utils.DirectoryFilterUtils
 import com.theveloper.pixelplay.utils.LogUtils
 import com.theveloper.pixelplay.utils.normalizeMetadataText
 import com.theveloper.pixelplay.utils.normalizeMetadataTextOrEmpty
+import com.theveloper.pixelplay.utils.splitArtistsByDelimiters
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -66,16 +68,19 @@ class MediaStoreSongRepository @Inject constructor(
             favoritesDao.getFavoriteSongIds().distinctUntilChanged(),
             userPreferencesRepository.allowedDirectoriesFlow.distinctUntilChanged(),
             userPreferencesRepository.blockedDirectoriesFlow.distinctUntilChanged(),
+            userPreferencesRepository.artistDelimitersFlow.distinctUntilChanged(),
             userPreferencesRepository.minSongDurationFlow.distinctUntilChanged()
         ) { values ->
             val favoriteIds = @Suppress("UNCHECKED_CAST") (values[1] as List<Long>)
             val allowedDirs = @Suppress("UNCHECKED_CAST") (values[2] as Set<String>)
             val blockedDirs = @Suppress("UNCHECKED_CAST") (values[3] as Set<String>)
-            val minDuration = values[4] as Int
+            val artistDelimiters = @Suppress("UNCHECKED_CAST") (values[4] as List<String>)
+            val minDuration = values[5] as Int
             fetchSongsFromMediaStore(
                 favoriteIds = favoriteIds.toSet(),
                 allowedDirs = allowedDirs.toList(),
                 blockedDirs = blockedDirs.toList(),
+                artistDelimiters = artistDelimiters,
                 minDurationMs = minDuration,
                 extraSelection = extraSelection,
                 extraSelectionArgs = extraSelectionArgs
@@ -89,6 +94,7 @@ class MediaStoreSongRepository @Inject constructor(
         favoriteIds: Set<Long>,
         allowedDirs: List<String>,
         blockedDirs: List<String>,
+        artistDelimiters: List<String>,
         minDurationMs: Int = 10000,
         extraSelection: String? = null,
         extraSelectionArgs: Array<String>? = null
@@ -170,14 +176,33 @@ class MediaStoreSongRepository @Inject constructor(
 
                     val id = cursor.getLong(idCol)
                     val albumId = cursor.getLong(albumIdCol)
-                    val albumArtUriString = AlbumArtUtils.getCachedAlbumArtUri(context, id)?.toString()
+
+                    // Album art (individual / cached per song)
+                    val albumArtUriString = AlbumArtUtils
+                        .getCachedAlbumArtUri(context, id)
+                        ?.toString()
+
+                    // Artists parsing (supports multiple artists separated by user delimiters)
+                    val rawArtist = cursor.getString(artistCol).normalizeMetadataTextOrEmpty()
+                    val splitArtists = rawArtist.splitArtistsByDelimiters(artistDelimiters)
+                    val normalizedArtists = if (splitArtists.isNotEmpty()) splitArtists else listOf(rawArtist)
+                    val primaryArtistName = normalizedArtists.firstOrNull().orEmpty()
+
+                    val artistRefs = normalizedArtists.mapIndexed { index, name ->
+                        ArtistRef(
+                            id = if (index == 0) cursor.getLong(artistIdCol)
+                            else (name.hashCode().toLong() * -1L) - 10_000L - index,
+                            name = name,
+                            isPrimary = index == 0
+                        )
+                    }
 
                     val song = Song(
                         id = id.toString(),
                         title = cursor.getString(titleCol).normalizeMetadataTextOrEmpty(),
-                        artist = cursor.getString(artistCol).normalizeMetadataTextOrEmpty(),
+                        artist = primaryArtistName,
                         artistId = cursor.getLong(artistIdCol),
-                        artists = emptyList(), // TODO: Secondary query for Multi-Artist or split string
+                        artists = artistRefs,
                         album = cursor.getString(albumCol).normalizeMetadataTextOrEmpty(),
                         albumId = albumId,
                         albumArtist = if (albumArtistCol != -1) cursor.getString(albumArtistCol).normalizeMetadataText() else null,
@@ -269,12 +294,14 @@ class MediaStoreSongRepository @Inject constructor(
         val favoriteIds = getFavoriteIds()
         val allowedDirs = userPreferencesRepository.allowedDirectoriesFlow.first()
         val blockedDirs = userPreferencesRepository.blockedDirectoriesFlow.first()
+        val artistDelimiters = userPreferencesRepository.artistDelimitersFlow.first()
         val minDuration = userPreferencesRepository.minSongDurationFlow.first()
         val queryTerm = "%${query.trim()}%"
         return fetchSongsFromMediaStore(
             favoriteIds = favoriteIds,
             allowedDirs = allowedDirs.toList(),
             blockedDirs = blockedDirs.toList(),
+            artistDelimiters = artistDelimiters,
             minDurationMs = minDuration,
             extraSelection = "${MediaStore.Audio.Media.TITLE} LIKE ? COLLATE NOCASE OR ${MediaStore.Audio.Media.ARTIST} LIKE ? COLLATE NOCASE",
             extraSelectionArgs = arrayOf(queryTerm, queryTerm)

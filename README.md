@@ -82,7 +82,6 @@
 ### ⚙️ Advanced Features
 - **Tag Editor** - Edit metadata with TagLib (MP3, FLAC, M4A support)
 - **AI Playlists** - Generate playlists with Gemini AI
-- **Audio Waveforms** - Visual representation with Amplituda (Soon)
 
 ---
 

@@ -6,7 +6,9 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.theveloper.pixelplay.data.DailyMixManager
 import com.theveloper.pixelplay.data.model.Playlist
+import com.theveloper.pixelplay.data.model.SmartPlaylistRule
 import com.theveloper.pixelplay.data.model.Song
 import com.theveloper.pixelplay.data.model.SortOption
 import com.theveloper.pixelplay.data.playlist.M3uManager
@@ -35,6 +37,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 data class PlaylistUiState(
@@ -71,6 +74,7 @@ sealed class PlaylistSongsOrderMode {
 class PlaylistViewModel @Inject constructor(
     private val playlistPreferencesRepository: PlaylistPreferencesRepository,
     private val musicRepository: MusicRepository,
+    private val dailyMixManager: DailyMixManager,
     private val aiPlaylistGenerator: com.theveloper.pixelplay.data.ai.AiPlaylistGenerator,
     private val m3uManager: M3uManager,
     @ApplicationContext private val context: Context
@@ -90,6 +94,7 @@ class PlaylistViewModel @Inject constructor(
             100 // Cargar 100 canciones a la vez para el selector
         const val FOLDER_PLAYLIST_PREFIX = "folder_playlist:"
         private const val MANUAL_ORDER_MODE = "manual"
+        private const val SMART_PLAYLIST_MAX_ITEMS = 100
     }
 
     // Helper function to resolve stored playlist sort keys
@@ -361,7 +366,8 @@ class PlaylistViewModel @Inject constructor(
         coverShapeDetail2: Float? = null,
         coverShapeDetail3: Float? = null,
         coverShapeDetail4: Float? = null,
-        source: String = "LOCAL" // Mark source
+        source: String = "LOCAL", // Mark source
+        smartRuleKey: String? = null
     ) {
         viewModelScope.launch {
             var savedCoverPath: String? = null
@@ -378,9 +384,23 @@ class PlaylistViewModel @Inject constructor(
                 )
             }
 
+            val resolvedSmartRule = SmartPlaylistRule.fromStorageKey(smartRuleKey)
+            val resolvedSongIds = if (resolvedSmartRule != null) {
+                buildSmartPlaylistSongIds(
+                    rule = resolvedSmartRule,
+                    limit = SMART_PLAYLIST_MAX_ITEMS
+                )
+            } else {
+                songIds
+            }
+            val resolvedSource = when {
+                resolvedSmartRule != null && source == "LOCAL" -> "SMART"
+                else -> source
+            }
+
             playlistPreferencesRepository.createPlaylist(
                 name = name,
-                songIds = songIds, // Use passed songIds
+                songIds = resolvedSongIds,
                 isAiGenerated = isAiGenerated,
                 isQueueGenerated = isQueueGenerated,
                 coverImageUri = savedCoverPath,
@@ -391,10 +411,82 @@ class PlaylistViewModel @Inject constructor(
                 coverShapeDetail2 = coverShapeDetail2,
                 coverShapeDetail3 = coverShapeDetail3,
                 coverShapeDetail4 = coverShapeDetail4,
-                source = source // Set source
+                source = resolvedSource
             )
             _playlistCreationEvent.emit(true)
         }
+    }
+
+    private suspend fun buildSmartPlaylistSongIds(
+        rule: SmartPlaylistRule,
+        limit: Int
+    ): List<String> {
+        val allSongs = musicRepository.getAudioFiles().first()
+        if (allSongs.isEmpty()) return emptyList()
+
+        val engagements = dailyMixManager.getAllEngagementStats()
+        val now = System.currentTimeMillis()
+        val songById = allSongs.associateBy { it.id }
+        val favoriteIds = musicRepository.getFavoriteSongIdsOnce()
+        val safeLimit = limit.coerceAtLeast(1).coerceAtMost(allSongs.size)
+
+        val pickedSongs = when (rule) {
+            SmartPlaylistRule.TOP_PLAYED -> {
+                engagements.entries
+                    .sortedWith(
+                        compareByDescending<Map.Entry<String, DailyMixManager.SongEngagementStats>> { it.value.playCount }
+                            .thenByDescending { it.value.totalPlayDurationMs }
+                            .thenByDescending { it.value.lastPlayedTimestamp }
+                    )
+                    .mapNotNull { (songId, _) -> songById[songId] }
+                    .take(safeLimit)
+            }
+
+            SmartPlaylistRule.RECENTLY_PLAYED -> {
+                engagements.entries
+                    .filter { it.value.lastPlayedTimestamp > 0L }
+                    .sortedByDescending { it.value.lastPlayedTimestamp }
+                    .mapNotNull { (songId, _) -> songById[songId] }
+                    .take(safeLimit)
+            }
+
+            SmartPlaylistRule.FORGOTTEN_FAVORITES -> {
+                val staleThreshold = now - TimeUnit.DAYS.toMillis(30)
+                allSongs
+                    .asSequence()
+                    .filter { favoriteIds.contains(it.id) }
+                    .sortedWith(
+                        compareBy<Song> { engagements[it.id]?.lastPlayedTimestamp ?: 0L }
+                            .thenBy { it.title.lowercase() }
+                    )
+                    .filter { song ->
+                        (engagements[song.id]?.lastPlayedTimestamp ?: 0L) < staleThreshold
+                    }
+                    .take(safeLimit)
+                    .toList()
+            }
+
+            SmartPlaylistRule.NEW_GEMS -> {
+                allSongs
+                    .asSequence()
+                    .sortedWith(
+                        compareByDescending<Song> { it.dateAdded }
+                            .thenBy { engagements[it.id]?.playCount ?: 0 }
+                    )
+                    .filter { song -> (engagements[song.id]?.playCount ?: 0) <= 2 }
+                    .take(safeLimit)
+                    .toList()
+            }
+        }
+
+        if (pickedSongs.isNotEmpty()) {
+            return pickedSongs.map { it.id }.distinct()
+        }
+
+        return allSongs
+            .sortedByDescending { it.dateAdded }
+            .take(safeLimit)
+            .map { it.id }
     }
 
 

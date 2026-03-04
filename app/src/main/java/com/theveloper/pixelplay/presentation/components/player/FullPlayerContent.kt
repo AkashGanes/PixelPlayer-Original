@@ -1568,7 +1568,6 @@ private fun PlayerProgressBarSection(
                 .padding(vertical = lerp(2.dp, 0.dp, expansionFraction))
                 .heightIn(min = 70.dp)
         ) {
-            
             // Isolated Slider Component
             EfficientSlider(
                 valueState = animatedProgressState,
