@@ -5,6 +5,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import com.theveloper.pixelplay.data.model.Song
@@ -24,6 +26,7 @@ internal data class LibrarySongPlaybackUiState(
 internal fun LibraryPlaybackAwareSongItem(
     song: Song,
     playerViewModel: PlayerViewModel,
+    albumArtSize: Dp = 56.dp,
     isSelected: Boolean = false,
     selectionIndex: Int? = null,
     isSelectionMode: Boolean = false,
@@ -48,6 +51,7 @@ internal fun LibraryPlaybackAwareSongItem(
         isPlaying = playbackUiState.isPlaying,
         isCurrentSong = playbackUiState.isCurrentSong,
         isLoading = false,
+        albumArtSize = albumArtSize,
         isSelected = isSelected,
         selectionIndex = selectionIndex,
         isSelectionMode = isSelectionMode,

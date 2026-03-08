@@ -331,6 +331,7 @@ fun LibrarySongsTab(
                                         song = song,
                                         playerViewModel = playerViewModel,
                                         isSelected = isSelected,
+                                        albumArtSize = 46.dp,
                                         isSelectionMode = isSelectionMode,
                                         selectionIndex = if (isSelectionMode) getSelectionIndex(song.id) else null,
                                         onLongPress = rememberedOnLongPress,

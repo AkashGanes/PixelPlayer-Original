@@ -45,6 +45,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.size.Size
 import com.theveloper.pixelplay.data.model.Song
@@ -61,6 +63,7 @@ import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
  * @param isCurrentSong Whether this is the current song in the queue (may be paused)
  * @param isLoading Whether to show loading shimmer state
  * @param showAlbumArt Whether to show the album art
+ * @param albumArtSize Size of the album art thumbnail when shown
  * @param customShape Optional custom shape for the surface
  * @param isSelected Whether this item is selected in multi-selection mode
  * @param isSelectionMode Whether multi-selection mode is active
@@ -77,6 +80,7 @@ fun EnhancedSongListItem(
     isCurrentSong: Boolean = false,
     isLoading: Boolean = false,
     showAlbumArt: Boolean = true,
+    albumArtSize: Dp = 46.dp,
     customShape: androidx.compose.ui.graphics.Shape? = null,
     containerColorOverride: Color? = null,
     isSelected: Boolean = false,
@@ -87,6 +91,8 @@ fun EnhancedSongListItem(
     onMoreOptionsClick: (Song) -> Unit,
     onClick: () -> Unit
 ) {
+    val albumArtTargetSizePx = with(LocalDensity.current) { albumArtSize.roundToPx() * 3 }
+
     // Animate corner radius based on current song state
     val animatedCornerRadius by animateDpAsState(
         targetValue = if (isCurrentSong && !isLoading) 50.dp else 22.dp,
@@ -95,7 +101,7 @@ fun EnhancedSongListItem(
     )
 
     val animatedAlbumCornerRadius by animateDpAsState(
-        targetValue = if (isCurrentSong && !isLoading) 50.dp else 12.dp,
+        targetValue = if (isCurrentSong && !isLoading) 50.dp else 10.dp,
         animationSpec = tween(durationMillis = 400),
         label = "albumCornerRadiusAnimation"
     )
@@ -180,7 +186,7 @@ fun EnhancedSongListItem(
                 if(showAlbumArt) {
                     ShimmerBox(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(albumArtSize)
                             .clip(CircleShape)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -277,14 +283,14 @@ fun EnhancedSongListItem(
                 if (showAlbumArt) {
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(albumArtSize)
                             .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                     ) {
                         SmartImage(
                             model = song.albumArtUriString,
                             contentDescription = song.title,
                             shape = albumShape,
-                            targetSize = Size(168, 168),
+                            targetSize = Size(albumArtTargetSizePx, albumArtTargetSizePx),
                             modifier = Modifier.fillMaxSize()
                         )
                         
