@@ -17,10 +17,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.FormatAlignLeft
 import androidx.compose.material.icons.automirrored.rounded.FormatAlignRight
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.FormatAlignCenter
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
@@ -294,7 +294,7 @@ fun LyricsMoreBottomSheet(
                             headlineContent = { Text("Show Translations") },
                             leadingContent = {
                                 Icon(
-                                    imageVector = if (showTranslation) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
+                                    imageVector = Icons.Rounded.Translate,
                                     contentDescription = null
                                 )
                             },
