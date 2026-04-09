@@ -242,6 +242,10 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <provider
+            android:name=".data.provider.SharedArtworkContentProvider"
+            android:authorities="${applicationId}.artwork"
+            android:exported="true" />
 
         <!-- Wear OS Data Layer: receives playback/volume commands from the watch -->
         <service
