@@ -25,9 +25,16 @@ class AiSystemPromptEngine @Inject constructor() {
                 
                 <format_rules>
                 - Output MUST be a raw JSON array of song IDs.
-                - NO markdown, NO conversational text.
+                - NO markdown, NO conversational text, NO explanations.
+                - Only return the JSON array.
                 - Example: ["id1", "id2", "id3"]
                 </format_rules>
+                
+                <strategy>
+                - Cross-reference user_context statistics.
+                - If the user asks for "new" or "unheard", prioritize IDs from the DISCOVERY_POOL.
+                - If the user asks for "favorites", prioritize IDs with high 'p' (plays) or 'f' (fav) flags.
+                </strategy>
             """.trimIndent()
  
             AiSystemPromptType.METADATA -> """
@@ -38,7 +45,7 @@ class AiSystemPromptEngine @Inject constructor() {
                 <format_rules>
                 - Output MUST be a raw JSON object matching this schema:
                   {"title": "...", "artist": "...", "album": "...", "genre": "..."}
-                - NO markdown, NO conversational text.
+                - NO markdown, NO conversational text, NO surrounding text.
                 - Example: {"title": "Levitating", "artist": "Dua Lipa", "album": "Future Nostalgia", "genre": "Dance-Pop"}
                 </format_rules>
             """.trimIndent()
@@ -80,7 +87,17 @@ class AiSystemPromptEngine @Inject constructor() {
         }
  
         val contextLayer = if (context.isNotBlank()) {
-            "<user_context>\n$context\n</user_context>"
+            """
+            <user_context>
+            $context
+            
+            <playback_stats_key>
+            The user_context contains lists of tracks with stats using this compact notation:
+            id | p(plays) | d(listening_minutes) | f(is_favorite: 1 or 0) | meta(title-artist)
+            DISCOVERY_POOL tracks have 0 plays and should be used for recommendations of new/unheard music.
+            </playback_stats_key>
+            </user_context>
+            """.trimIndent()
         } else ""
  
         return """
