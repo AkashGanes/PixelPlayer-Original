@@ -53,10 +53,10 @@ class AiMetadataGenerator @Inject constructor(
             Result.success(metadata)
         } catch (e: SerializationException) {
             Timber.e(e, "Error deserializing AI response.")
-            Result.failure(Exception("Failed to parse AI response: ${e.message}"))
+            Result.failure(Exception("Failed to parse AI response: ${e.message}", e))
         } catch (e: Exception) {
             Timber.e(e, "Generic error in AiMetadataGenerator.")
-            Result.failure(Exception("AI Error: ${e.message}"))
+            Result.failure(Exception("AI Error: ${e.message}", e))
         }
     }
 }

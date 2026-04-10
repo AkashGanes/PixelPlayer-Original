@@ -68,6 +68,80 @@ class AiOrchestrator @Inject constructor(
         }
     }
 
+    private suspend fun setModel(provider: AiProvider, model: String) {
+        when (provider) {
+            AiProvider.GEMINI -> preferencesRepo.setGeminiModel(model)
+            AiProvider.DEEPSEEK -> preferencesRepo.setDeepseekModel(model)
+            AiProvider.GROQ -> preferencesRepo.setGroqModel(model)
+            AiProvider.MISTRAL -> preferencesRepo.setMistralModel(model)
+            AiProvider.NVIDIA -> preferencesRepo.setNvidiaModel(model)
+            AiProvider.KIMI -> preferencesRepo.setKimiModel(model)
+            AiProvider.GLM -> preferencesRepo.setGlmModel(model)
+            AiProvider.OPENAI -> preferencesRepo.setOpenAiModel(model)
+        }
+    }
+
+    private suspend fun generateWithRecovery(
+        provider: AiProvider,
+        apiKey: String,
+        systemPrompt: String,
+        prompt: String,
+        temperature: Float
+    ): String {
+        val client = clientFactory.createClient(provider, apiKey)
+        val requestedModel = getModel(provider).ifBlank { client.getDefaultModel() }
+
+        return try {
+            client.generateContent(
+                requestedModel,
+                systemPrompt,
+                prompt,
+                temperature
+            )
+        } catch (e: Exception) {
+            val failure = com.theveloper.pixelplay.data.ai.provider.AiProviderSupport.wrapThrowable(
+                provider.displayName,
+                e,
+                requestedModel
+            )
+
+            val recoveredModel = recoverModelIfNeeded(
+                provider = provider,
+                apiKey = apiKey,
+                requestedModel = requestedModel,
+                client = client,
+                failure = failure
+            ) ?: throw failure
+
+            client.generateContent(
+                recoveredModel,
+                systemPrompt,
+                prompt,
+                temperature
+            )
+        }
+    }
+
+    private suspend fun recoverModelIfNeeded(
+        provider: AiProvider,
+        apiKey: String,
+        requestedModel: String,
+        client: com.theveloper.pixelplay.data.ai.provider.AiClient,
+        failure: com.theveloper.pixelplay.data.ai.provider.AiProviderException
+    ): String? {
+        if (!failure.isModelUnavailable()) return null
+
+        val availableModels = runCatching { client.getAvailableModels(apiKey) }.getOrDefault(emptyList())
+        val recoveredModel = com.theveloper.pixelplay.data.ai.provider.AiProviderSupport.selectRecoveryModel(
+            currentModel = requestedModel,
+            defaultModel = client.getDefaultModel(),
+            availableModels = availableModels
+        ) ?: return null
+
+        setModel(provider, recoveredModel)
+        return recoveredModel
+    }
+
     suspend fun generateContent(
         prompt: String,
         type: AiSystemPromptType = AiSystemPromptType.GENERAL,
@@ -99,19 +173,11 @@ class AiOrchestrator @Inject constructor(
         val combinedSystemPrompt = promptEngine.buildPrompt(basePersona, type, context)
         
         // Cache entry is valid for a specific prompt + system instruction + provider
-        val hash = (combinedSystemPrompt + prompt).sha256()
+        val hash = (userProvider.name + combinedSystemPrompt + prompt).sha256()
 
         cacheDao.getCache(hash)?.responseJson?.let { return it }
 
-        val providersToTry = mutableListOf<AiProvider>()
-        providersToTry.add(userProvider)
-        
-        // Setup failover list prioritizing fast/free models
-        if (userProvider != AiProvider.GROQ) providersToTry.add(AiProvider.GROQ)
-        if (userProvider != AiProvider.MISTRAL) providersToTry.add(AiProvider.MISTRAL)
-        if (userProvider != AiProvider.GEMINI) providersToTry.add(AiProvider.GEMINI)
-        if (userProvider != AiProvider.DEEPSEEK) providersToTry.add(AiProvider.DEEPSEEK)
-        
+        val providersToTry = com.theveloper.pixelplay.data.ai.provider.AiProviderSupport.buildProviderChain(userProvider)
         val failedProviders = mutableListOf<String>()
         val now = System.currentTimeMillis()
         
@@ -123,27 +189,29 @@ class AiOrchestrator @Inject constructor(
             try {
                 val apiKey = getApiKey(provider)
                 if (apiKey.isBlank()) continue
-                
-                val model = getModel(provider)
+
                 // Use the shared base persona but specialized type rules for each provider in the chain
                 val providerPersona = getBasePersona(provider)
                 val finalSystemPrompt = promptEngine.buildPrompt(providerPersona, type, context)
-                
-                val client = clientFactory.createClient(provider, apiKey)
-                val response = client.generateContent(
-                    model.ifBlank { client.getDefaultModel() }, 
-                    finalSystemPrompt,
-                    prompt,
-                    resolvedTemperature
+
+                val response = generateWithRecovery(
+                    provider = provider,
+                    apiKey = apiKey,
+                    systemPrompt = finalSystemPrompt,
+                    prompt = prompt,
+                    temperature = resolvedTemperature
                 )
                 
                 cacheDao.insert(AiCacheEntity(promptHash = hash, responseJson = response, timestamp = System.currentTimeMillis()))
                 return response
             } catch (e: Exception) {
                 // AI Optimization: Robust failover logic—if one provider fails, we log and try the next in the chain
-                failedProviders.add("${provider.name}: ${e.message}")
-                // Trigger cooldown on critical failures (auth, network) to prevent repeated stalls
-                providerCooldowns[provider] = now + COOLDOWN_DURATION_MS
+                val failure = com.theveloper.pixelplay.data.ai.provider.AiProviderSupport.wrapThrowable(provider.displayName, e)
+                failedProviders.add("${provider.name}: ${failure.message}")
+                // Trigger cooldown only on provider-level outages and account problems.
+                if (failure.shouldCooldown()) {
+                    providerCooldowns[provider] = now + COOLDOWN_DURATION_MS
+                }
             }
         }
         

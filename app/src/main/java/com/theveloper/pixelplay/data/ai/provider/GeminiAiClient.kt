@@ -36,9 +36,21 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
         temperature: Float
     ): String {
         return withContext(Dispatchers.IO) {
-            val generativeModel = createModel(model, systemPrompt, temperature)
-            val response = generativeModel.generateContent(prompt)
-            response.text ?: throw Exception("Gemini returned an empty response")
+            val resolvedModel = model.ifBlank { DEFAULT_GEMINI_MODEL }
+
+            try {
+                val generativeModel = createModel(resolvedModel, systemPrompt, temperature)
+                val response = generativeModel.generateContent(prompt)
+                response.text ?: throw AiProviderSupport.createException(
+                    providerName = "Gemini",
+                    statusCode = null,
+                    transportMessage = "Gemini returned an empty response",
+                    responseBody = null,
+                    requestedModel = resolvedModel
+                )
+            } catch (e: Exception) {
+                throw AiProviderSupport.wrapThrowable("Gemini", e, resolvedModel)
+            }
         }
     }
     

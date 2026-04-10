@@ -976,7 +976,11 @@ class SettingsViewModel @Inject constructor(
                 val provider = AiProvider.fromString(providerName)
                 val aiClient = aiClientFactory.createClient(provider, apiKey)
                 val modelStrings = aiClient.getAvailableModels(apiKey)
-                val models = modelStrings.map { GeminiModel(it, formatModelDisplayName(it)) }
+                val models = modelStrings
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .map { GeminiModel(it, formatModelDisplayName(it)) }
                 
                 _uiState.update { 
                     it.copy(
@@ -999,7 +1003,8 @@ class SettingsViewModel @Inject constructor(
                     else -> ""
                 }
                 
-                if (currentModel.isBlank() && models.isNotEmpty()) {
+                val availableModelNames = models.map { it.name }.toSet()
+                if (models.isNotEmpty() && (currentModel.isBlank() || currentModel !in availableModelNames)) {
                     val firstModel = models.first().name
                     when (providerName) {
                         "GEMINI" -> aiPreferencesRepository.setGeminiModel(firstModel)

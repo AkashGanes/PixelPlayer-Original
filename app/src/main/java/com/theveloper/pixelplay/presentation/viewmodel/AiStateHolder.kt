@@ -8,6 +8,7 @@ import com.theveloper.pixelplay.data.ai.AiMetadataGenerator
 import com.theveloper.pixelplay.data.ai.AiNotificationManager
 import com.theveloper.pixelplay.data.ai.AiPlaylistGenerator
 import com.theveloper.pixelplay.data.ai.SongMetadata
+import com.theveloper.pixelplay.data.ai.provider.AiProviderException
 import com.theveloper.pixelplay.data.preferences.PlaylistPreferencesRepository
 import com.theveloper.pixelplay.data.model.Song
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -334,21 +335,40 @@ class AiStateHolder @Inject constructor(
     }
 
     private fun resolveAiErrorMessage(error: Throwable): String {
+        val providerFailure = error.findProviderFailure()
         val detail = extractAiErrorDetail(error)
-        return if (detail.contains("api key", ignoreCase = true)) {
-            context.getString(R.string.ai_error_api_key)
-        } else {
-            context.getString(R.string.ai_error_generic, detail)
+
+        return when {
+            providerFailure?.isApiKeyIssue() == true || detail.contains("api key", ignoreCase = true) ->
+                context.getString(R.string.ai_error_api_key)
+
+            providerFailure?.isBillingIssue() == true ->
+                context.getString(R.string.ai_error_quota)
+
+            providerFailure?.isModelUnavailable() == true ->
+                context.getString(R.string.ai_error_model_unavailable)
+
+            else ->
+                context.getString(R.string.ai_error_generic, detail)
         }
     }
 
     private fun extractAiErrorDetail(error: Throwable): String {
-        return listOf(error.message.orEmpty(), error.cause?.message.orEmpty())
+        return generateSequence(error) { it.cause }
+            .flatMap { throwable ->
+                sequenceOf(throwable.message.orEmpty())
+            }
             .map { raw ->
                 raw.replace(Regex("^AI\\s*Error:\\s*", RegexOption.IGNORE_CASE), "").trim()
             }
             .firstOrNull { it.isNotBlank() }
             ?: "Unknown error"
+    }
+
+    private fun Throwable.findProviderFailure(): AiProviderException? {
+        return generateSequence(this) { it.cause }
+            .filterIsInstance<AiProviderException>()
+            .firstOrNull()
     }
 
     private fun resolveAiPlaylistName(
