@@ -148,7 +148,7 @@ class AiOrchestrator @Inject constructor(
                 // AI Optimization: Moderate temperature for tags to allow creative yet relevant descriptors
                 AiSystemPromptType.TAGGING -> 0.4f
                 // AI Optimization: Balanced temperature for playlists to ensure variety without losing cohesion
-                AiSystemPromptType.PLAYLIST -> 0.6f
+                AiSystemPromptType.PLAYLIST, AiSystemPromptType.DAILY_MIX -> 0.6f
                 // AI Optimization: High temperature for persona-based responses to increase flair and engagement
                 AiSystemPromptType.PERSONA -> 0.85f
                 AiSystemPromptType.GENERAL -> 0.7f

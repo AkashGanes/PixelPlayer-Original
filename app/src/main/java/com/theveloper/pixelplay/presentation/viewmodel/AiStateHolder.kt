@@ -271,7 +271,7 @@ class AiStateHolder @Inject constructor(
                     allSongs = allSongs,
                     minLength = minLength,
                     maxLength = maxLength,
-                    candidateSongs = candidatePool
+                    candidateSongs = candidatePool, type = AiSystemPromptType.DAILY_MIX
                 )
 
                 result.onSuccess { generatedSongs ->
