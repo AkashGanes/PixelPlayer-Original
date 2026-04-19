@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.theveloper.pixelplay.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import com.theveloper.pixelplay.data.model.Song
@@ -56,6 +57,7 @@ internal fun UnifiedPlayerQueueLayer(
     currentQueueSourceName: String,
     infrequentPlayerState: StablePlayerState,
     activeTimerValueDisplay: State<String?>,
+    activeTimerDurationMinutes: State<Int?>,
     playCount: State<Float>,
     isEndOfTrackTimerActive: State<Boolean>,
     onDismissQueue: () -> Unit,
@@ -131,6 +133,7 @@ internal fun UnifiedPlayerQueueLayer(
                     onToggleShuffle = onToggleShuffle,
                     onClearQueue = onClearQueue,
                     activeTimerValueDisplay = activeTimerValueDisplay,
+                    activeTimerDurationMinutes = activeTimerDurationMinutes,
                     playCount = playCount,
                     isEndOfTrackTimerActive = isEndOfTrackTimerActive,
                     onSetPredefinedTimer = onSetPredefinedTimer,
@@ -197,12 +200,12 @@ internal fun UnifiedPlayerSongInfoLayer(
                 onAddToQueue = {
                     playerViewModel.addSongToQueue(liveSong)
                     onDismissSongInfo()
-                    Toast.makeText(context, "Added to queue", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.toast_added_to_queue), Toast.LENGTH_SHORT).show()
                 },
                 onAddNextToQueue = {
                     playerViewModel.addSongNextToQueue(liveSong)
                     onDismissSongInfo()
-                    Toast.makeText(context, "Playing next", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.toast_playing_next), Toast.LENGTH_SHORT).show()
                 },
                 onAddToPlayList = {
                     showPlaylistBottomSheet = true
@@ -285,6 +288,7 @@ internal fun UnifiedPlayerQueueAndSongInfoHost(
     val latestPlaybackQueue = rememberUpdatedState(currentPlaybackQueue)
     val latestQueueSourceName = rememberUpdatedState(currentQueueSourceName)
     val inactiveTimerValueDisplayState = rememberUpdatedState<String?>(null)
+    val inactiveTimerDurationMinutesState = rememberUpdatedState<Int?>(null)
     val inactivePlayCountState = rememberUpdatedState(0f)
     val inactiveEndOfTrackTimerActiveState = rememberUpdatedState(false)
     val activeTimerValueDisplay: State<String?> =
@@ -292,6 +296,12 @@ internal fun UnifiedPlayerQueueAndSongInfoHost(
             playerViewModel.activeTimerValueDisplay.collectAsStateWithLifecycle()
         } else {
             inactiveTimerValueDisplayState
+        }
+    val activeTimerDurationMinutes: State<Int?> =
+        if (isQueueTelemetryActive) {
+            playerViewModel.activeTimerDurationMinutes.collectAsStateWithLifecycle()
+        } else {
+            inactiveTimerDurationMinutesState
         }
     val playCount: State<Float> =
         if (isQueueTelemetryActive) {
@@ -375,6 +385,7 @@ internal fun UnifiedPlayerQueueAndSongInfoHost(
                 currentQueueSourceName = currentQueueSourceName,
                 infrequentPlayerState = infrequentPlayerState,
                 activeTimerValueDisplay = activeTimerValueDisplay,
+                activeTimerDurationMinutes = activeTimerDurationMinutes,
                 playCount = playCount,
                 isEndOfTrackTimerActive = isEndOfTrackTimerActive,
                 onDismissQueue = onDismissQueueRequest,
